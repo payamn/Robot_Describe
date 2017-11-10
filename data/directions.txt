@@ -1,0 +1,19 @@
+corner of the map
+-
+Turning left
+-
+Turning right
+-
+Going forward
+Moving forward
+-
+There are two ways
+There are two options
+We can do one of the two options them
+-
+We have only one way
+There is only one way
+There is no other way
+-
+intersection
+-
