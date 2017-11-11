@@ -52,14 +52,20 @@ class DataSet:
         self._intersection = self.read_list_direction()
 
     def write_bag(self, topic, msg_data):
+        self.lock.acquire()
+        if type(msg_data) != LaserScan:
+            rospy.logwarn(msg_data.data)
         self._bag.write(topic, msg_data)
+        self.lock.release()
 
     def new_sequence(self):
+        rospy.loginfo("saving " + str(self._bag_name) + str(self._bag_num))
         self._bag.close()
         self._bag_num += 1
         self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
 
     def __init__(self, directions, data_generation):
+        self.lock = threading.Lock()
         self._directions = open(directions, 'r')
         self._bag_num = 0
         self._bag_name = data_generation
@@ -122,6 +128,7 @@ class Robot:
         rospack = rospkg.RosPack()
 
         # get the file path for rospy_tutorials
+        self.remaining_intersection = random.randint(3, 7)
         self.path = rospack.get_path('blob_follower')
         self.language_topic = "language"
         self.lock = threading.Lock()
@@ -172,6 +179,11 @@ class Robot:
         else:
             return "Turning around"
 
+    def reset_intersection_collection(self):
+        self.remaining_intersection = random.randint(3, 7)
+        threading.Timer(random.uniform(0.5, 4.1), self.data_set.new_sequence).start()
+
+
     def check_next_intersection(self):
         if Utility.distance_vector(self.list_intersection[self.next_pose].pose, self.pose) < intersection_r:
             num_ways = len(self.list_intersection[self.next_pose].connection)
@@ -197,7 +209,7 @@ class Robot:
             self.data_set.write_bag(self.language_topic, str_msg)
             bc = pose_intersection - self.list_intersection[eligible_neighbor[index]].pose
             degree = Utility.degree_vector(ab, bc)
-
+            str_msg = String()
             str_msg.data = self.direction(degree)
             self.data_set.write_bag(self.language_topic, str_msg)
 
@@ -217,6 +229,9 @@ class Robot:
             target_goal_simple.goal.target_pose.header.stamp = rospy.Time.now()
             target_goal_simple.header.stamp = rospy.Time.now()
             self.publisher.publish(target_goal_simple)
+            self.remaining_intersection -= 1
+            if self.remaining_intersection == 0:
+                self.reset_intersection_collection()
 
 
 def callback_laser_scan(scan, my_robot):
