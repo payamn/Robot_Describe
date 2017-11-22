@@ -2,13 +2,39 @@ import random
 import rosbag
 from sensor_msgs.msg import LaserScan
 import threading
+import torch
 import rospy
+from torch.autograd import Variable
+
+EOS_token = 1
+use_cuda = torch.cuda.is_available()
 
 
 class Data:
     def __init__(self):
         self.laser = []
-        self.sentences = ""
+        self.words = ""
+
+
+class Lang:
+    def __init__(self):
+        self.word2index = {}
+        self.word2count = {}
+        self.index2word = {0: "SOS", 1: "EOS"}
+        self.n_words = 2  # Count SOS and EOS
+
+    def add_words(self, words):
+        for word in words:
+            self.add_word(word)
+
+    def add_word(self, word):
+        if word not in self.word2index:
+            self.word2index[word] = self.n_words
+            self.word2count[word] = 1
+            self.index2word[self.n_words] = word
+            self.n_words += 1
+        else:
+            self.word2count[word] += 1
 
 
 
@@ -66,23 +92,39 @@ class DataSet:
                 for topic, msg, t in bag.read_messages(topics=['language', '/robot_0/base_scan_1']):
                     if topic == 'language':
                         rospy.loginfo(msg)
-                        data.sentences += msg.data
+                        data.words += msg.data
                     else:
                         counter += 1
-                        data.laser.append(msg.ranges)
+                        ranges = tuple(int(100000 * x) for x in msg.ranges)
+                        data.laser.append(ranges)
                 self._bag_num += 1
                 bag.close()
+                data.words = data.words.replace('\n', ' ')
+                data.words = [a for a in data.words.split(' ') if a != '']
+                self.lang.add_words(data.words)
                 self.list_data.append(data)
             except IOError:
                 rospy.loginfo("number of bag read: " + str(self._bag_num) + "laser: " +str(counter))
                 break
-
 
     def new_sequence(self):
         rospy.loginfo("saving " + str(self._bag_name) + str(self._bag_num))
         self._bag.close()
         self._bag_num += 1
         self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
+
+    def random_pair(self):
+        pair = random.choice(self.list_data)
+        words = [self.lang.word2index[word] for word in pair.words]
+        words.append(EOS_token)
+        words = Variable(torch.LongTensor(words).view(-1, 1))
+        laser = Variable(torch.LongTensor(pair.laser).view(-1, len(pair.laser[0])))
+
+        if use_cuda:
+            words = words.cuda()
+            laser = laser.cuda()
+
+        return laser, words
 
     def __init__(self, directions, data_generation, is_data_generation):
         self.lock = threading.Lock()
@@ -106,6 +148,7 @@ class DataSet:
             print self._forward
             print self._intersection
         else:
+            self.lang = Lang()
             self._bag_num = 0 # means no bag read yet
             rospy.loginfo("number of bag read: " + self._bag_name + str(self._bag_num+1))
             self._bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
