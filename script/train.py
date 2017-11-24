@@ -29,19 +29,24 @@ class EncoderRNN(nn.Module):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
-        self.input_size = input_size
+        self.input_size = 1
         self.conv = nn.Conv1d(input_size, hidden_size, 5)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.gru = nn.GRU(hidden_size*(90-4), hidden_size*(90-4))
 
     def forward(self, input, hidden):
-        conv = self.conv(input).view(1, 1, self.input_size, -1)
-        output = conv
+
+        print(input.dim())
+        print(input.size())
+        conv = self.conv(input.view(1,1,90))
+        print(conv.dim())
+        print(conv.size())
+        output = conv.view(1, 1, -1)
         for i in range(self.n_layers):
             output, hidden = self.gru(output, hidden)
         return output, hidden
 
     def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        result = Variable(torch.zeros(1, 1, self.hidden_size*(90-4)))
         if use_cuda:
             return result.cuda()
         else:
@@ -92,59 +97,13 @@ class AttnDecoderRNN(nn.Module):
 
 
 class Model:
-    def summary(self, input_size, model):
-        def register_hook(module):
-            def hook(module, input, output):
-                class_name = str(module.__class__).split('.')[-1].split("'")[0]
-                module_idx = len(summary)
 
-                m_key = '%s-%i' % (class_name, module_idx + 1)
-                summary[m_key] = collections.OrderedDict()
-                summary[m_key]['input_shape'] = list(input[0].size())
-                summary[m_key]['input_shape'][0] = -1
-                summary[m_key]['output_shape'] = list(output.size())
-                summary[m_key]['output_shape'][0] = -1
-
-                params = 0
-                if hasattr(module, 'weight'):
-                    params += torch.prod(torch.LongTensor(list(module.weight.size())))
-                    if module.weight.requires_grad:
-                        summary[m_key]['trainable'] = True
-                    else:
-                        summary[m_key]['trainable'] = False
-                if hasattr(module, 'bias'):
-                    params += torch.prod(torch.LongTensor(list(module.bias.size())))
-                summary[m_key]['nb_params'] = params
-
-            if not isinstance(module, nn.Sequential) and \
-                    not isinstance(module, nn.ModuleList) and \
-                    not (module == model):
-                hooks.append(module.register_forward_hook(hook))
-
-        # check if there are multiple inputs to the network
-        if isinstance(input_size[0], (list, tuple)):
-            x = [Variable(torch.rand(1, *in_size)) for in_size in input_size]
-        else:
-            x = Variable(torch.rand(1, *input_size))
-
-        # create properties
-        summary =collections.OrderedDict()
-        hooks = []
-        # register hook
-        model.apply(register_hook)
-        # make a forward pass
-        model(x)
-        # remove these hooks
-        for h in hooks:
-            h.remove()
-
-        return summary
 
     def __init__(self, dataset, teacher_forcing_ratio = 0.5):
         self.dataset = dataset
         self.teacher_forcing_ratio = teacher_forcing_ratio
         hidden_size = 32
-        encoder1 = EncoderRNN(len(self.dataset.list_data[0].laser), hidden_size)
+        encoder1 = EncoderRNN(1, hidden_size)
         attn_decoder1 = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
                                        1, dropout_p=0.1)
         print ("encoder size:")
@@ -171,11 +130,11 @@ class Model:
         target_length = target_variable.size()[0]
         input_length = input_variable.size()[0]
 
-        encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
+        encoder_outputs = Variable(torch.zeros(input_length, encoder.hidden_size*(90-4)))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
         loss = 0
-        print (input_variable[0])
+        print ("dimention: {} input length {}".format(input_variable[0].dim(), input_length))
         for ei in range(input_length):
             encoder_output, encoder_hidden = encoder(
                 input_variable[ei], encoder_hidden)
@@ -241,6 +200,7 @@ class Model:
         decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
         training_pairs = [self.dataset.random_pair()
                           for i in range(n_iters)]
+
         criterion = nn.NLLLoss()
 
         for iter in range(1, n_iters + 1):

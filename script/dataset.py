@@ -95,8 +95,8 @@ class DataSet:
                         data.words += msg.data
                     else:
                         counter += 1
-                        ranges = tuple(int(100000 * x) for x in msg.ranges)
-                        data.laser.append(ranges)
+                        # ranges = tuple(int(100000 * x) for x in msg.ranges)
+                        data.laser.append(msg.ranges)
                 self._bag_num += 1
                 bag.close()
                 data.words = data.words.replace('\n', ' ')
@@ -117,8 +117,10 @@ class DataSet:
         pair = random.choice(self.list_data)
         words = [self.lang.word2index[word] for word in pair.words]
         words.append(EOS_token)
-        words = Variable(torch.LongTensor(words).view(-1, 1))
-        laser = Variable(torch.LongTensor(pair.laser).view(-1, len(pair.laser[0])))
+        words = Variable(torch.LongTensor(words).view( -1, 1)).float()
+        laser = Variable(torch.DoubleTensor(pair.laser).view( -1, len(pair.laser[0]))).float()
+
+        rospy.logerr((laser.dim()))
 
         if use_cuda:
             words = words.cuda()

@@ -433,6 +433,7 @@ def train(input_variable, target_variable, encoder, decoder, encoder_optimizer, 
     loss = 0
 
     for ei in range(input_length):
+        print ("dimention: {} input length {}".format(input_variable.size(), input_length))
         encoder_output, encoder_hidden = encoder(
             input_variable[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0][0]
