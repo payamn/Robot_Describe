@@ -31,22 +31,19 @@ class EncoderRNN(nn.Module):
         self.hidden_size = hidden_size
         self.input_size = 1
         self.conv = nn.Conv1d(input_size, hidden_size, 5)
-        self.gru = nn.GRU(hidden_size*(90-4), hidden_size*(90-4))
+        self.linear = nn.Linear(hidden_size*(90-4), self.hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
-
-        print(input.dim())
-        print(input.size())
-        conv = self.conv(input.view(1,1,90))
-        print(conv.dim())
-        print(conv.size())
-        output = conv.view(1, 1, -1)
+        conv = self.conv(input.view(1, 1, 90))
+        linear = conv.view(1, 1, -1)
+        output = self.linear(linear)
         for i in range(self.n_layers):
             output, hidden = self.gru(output, hidden)
         return output, hidden
 
     def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.hidden_size*(90-4)))
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
         if use_cuda:
             return result.cuda()
         else:
@@ -72,9 +69,10 @@ class AttnDecoderRNN(nn.Module):
     def forward(self, input, hidden, encoder_output, encoder_outputs):
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
+        concat = torch.cat((embedded[0], hidden[0]), 1)
+        attention = self.attn(concat)
 
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0]), 1)))
+        attn_weights = F.softmax(attention)
         attn_applied = torch.bmm(attn_weights.unsqueeze(0),
                                  encoder_outputs.unsqueeze(0))
 
@@ -97,15 +95,13 @@ class AttnDecoderRNN(nn.Module):
 
 
 class Model:
-
-
     def __init__(self, dataset, teacher_forcing_ratio = 0.5):
         self.dataset = dataset
         self.teacher_forcing_ratio = teacher_forcing_ratio
         hidden_size = 32
         encoder1 = EncoderRNN(1, hidden_size)
         attn_decoder1 = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
-                                       1, dropout_p=0.1)
+                                       1, dropout_p=0.1, max_length= self.dataset._max_length_laser)
         print ("encoder size:")
         for parameter in encoder1.parameters():
             print (parameter.size())
@@ -118,7 +114,7 @@ class Model:
             encoder1 = encoder1.cuda()
             attn_decoder1 = attn_decoder1.cuda()
 
-        self.trainIters(encoder1, attn_decoder1, 30, print_every=5)
+        self.trainIters(encoder1, attn_decoder1, 9000, print_every=10 )
 
     def train(self, input_variable, target_variable, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
               max_length=MAX_LENGTH):
@@ -130,11 +126,10 @@ class Model:
         target_length = target_variable.size()[0]
         input_length = input_variable.size()[0]
 
-        encoder_outputs = Variable(torch.zeros(input_length, encoder.hidden_size*(90-4)))
+        encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
         loss = 0
-        print ("dimention: {} input length {}".format(input_variable[0].dim(), input_length))
         for ei in range(input_length):
             encoder_output, encoder_hidden = encoder(
                 input_variable[ei], encoder_hidden)
@@ -178,7 +173,7 @@ class Model:
         return loss.data[0] / target_length
 
     @staticmethod
-    def asMinutes(self, s):
+    def asMinutes(s):
         m = math.floor(s / 60)
         s -= m * 60
         return '%dm %ds' % (m, s)
@@ -198,35 +193,36 @@ class Model:
 
         encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
         decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-        training_pairs = [self.dataset.random_pair()
-                          for i in range(n_iters)]
 
         criterion = nn.NLLLoss()
 
         for iter in range(1, n_iters + 1):
-            training_pair = training_pairs[iter - 1]
-            input_variable = training_pair[0]
-            target_variable = training_pair[1]
+            self.dataset.shuffle_data()
+            for d in range(1, len(self.dataset.list_data)+1):
+                training_pair = self.dataset.next_pair()
+                input_variable = training_pair[0]
+                target_variable = training_pair[1]
 
-            loss = self.train(input_variable, target_variable, encoder,
-                         decoder, encoder_optimizer, decoder_optimizer, criterion)
-            print_loss_total += loss
-            plot_loss_total += loss
+                loss = self.train(input_variable, target_variable, encoder,
+                             decoder, encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
+                print_loss_total += loss
+                plot_loss_total += loss
 
-            if iter % print_every == 0:
-                print_loss_avg = print_loss_total / print_every
-                print_loss_total = 0
-                print('%s (%d %d%%) %.4f' % (self.timeSince(start, iter / n_iters),
-                                             iter, iter / n_iters * 100, print_loss_avg))
+                if d % print_every == 0:
+                    print_loss_avg = print_loss_total / d
+                    print('epoch %d %s (%d %.2f%%) %.4f' % (iter, self.timeSince(start, d / len(self.dataset.list_data)),
+                                                 d, float(d) / len(self.dataset.list_data) * 100, print_loss_avg))
 
-            if iter % plot_every == 0:
-                plot_loss_avg = plot_loss_total / plot_every
-                plot_losses.append(plot_loss_avg)
-                plot_loss_total = 0
+            plot_loss = plot_loss_total
+            plot_losses.append(plot_loss)
+            plot_loss_total = 0
+            print('%s (%d %fd%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
+                                         iter, iter / float(n_iters) * 100, print_loss_total, print_loss_total/len(self.dataset.list_data)))
+            print_loss_total = 0
 
         self.showPlot(plot_losses)
 
-    def showPlot(points):
+    def showPlot(self, points):
         plt.figure()
         fig, ax = plt.subplots()
         # this locator puts ticks at regular intervals
@@ -271,7 +267,7 @@ class Model:
     #         decoder_input = decoder_input.cuda() if use_cuda else decoder_input
     #
     #     return decoded_words, decoder_attentions[:di + 1]
-
+    #
 
     ######################################################################
     # We can evaluate random sentences from the training set and print out the

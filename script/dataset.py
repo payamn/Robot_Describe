@@ -37,9 +37,7 @@ class Lang:
             self.word2count[word] += 1
 
 
-
 class DataSet:
-
     def read_list_direction(self):
         list_temp = []
         line = self._directions.readline()
@@ -99,6 +97,8 @@ class DataSet:
                         data.laser.append(msg.ranges)
                 self._bag_num += 1
                 bag.close()
+                if len(data.laser) > self._max_length_laser:
+                    self._max_length_laser = len(data.laser)
                 data.words = data.words.replace('\n', ' ')
                 data.words = [a for a in data.words.split(' ') if a != '']
                 self.lang.add_words(data.words)
@@ -113,14 +113,17 @@ class DataSet:
         self._bag_num += 1
         self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
 
-    def random_pair(self):
-        pair = random.choice(self.list_data)
+    def shuffle_data(self):
+        random.shuffle(self.list_data)
+        self._list_iterator = 0
+
+    def next_pair(self):
+        pair = self.list_data[self._list_iterator]
+        self._list_iterator += 1
         words = [self.lang.word2index[word] for word in pair.words]
         words.append(EOS_token)
-        words = Variable(torch.LongTensor(words).view( -1, 1)).float()
+        words = Variable(torch.LongTensor(words).view( -1, 1))
         laser = Variable(torch.DoubleTensor(pair.laser).view( -1, len(pair.laser[0]))).float()
-
-        rospy.logerr((laser.dim()))
 
         if use_cuda:
             words = words.cuda()
@@ -129,6 +132,7 @@ class DataSet:
         return laser, words
 
     def __init__(self, directions, data_generation, is_data_generation):
+        self._list_iterator = 0
         self.lock = threading.Lock()
         self.list_data = []
         self._directions = open(directions, 'r')
@@ -150,6 +154,7 @@ class DataSet:
             print self._forward
             print self._intersection
         else:
+            self._max_length_laser = 0
             self.lang = Lang()
             self._bag_num = 0 # means no bag read yet
             rospy.loginfo("number of bag read: " + self._bag_name + str(self._bag_num+1))
