@@ -4,7 +4,7 @@ import unicodedata
 import string
 import re
 import collections
-
+import os
 import random
 import time
 import math
@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch import optim
 import torch.nn.functional as F
+import sys
 
 use_cuda = torch.cuda.is_available()
 
@@ -95,30 +96,37 @@ class AttnDecoderRNN(nn.Module):
 
 
 class Model:
-    def __init__(self, dataset, teacher_forcing_ratio = 0.5):
+    def __init__(self, dataset, save_model_path, resume_path = None, teacher_forcing_ratio = 0.5):
         self.dataset = dataset
+
+        hidden_size = 1024
+        self.encoder= EncoderRNN(1, hidden_size)
+        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,                                           1, dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        if use_cuda:
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
+
         self.teacher_forcing_ratio = teacher_forcing_ratio
-        hidden_size = 32
-        encoder1 = EncoderRNN(1, hidden_size)
-        attn_decoder1 = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
-                                       1, dropout_p=0.1, max_length= self.dataset._max_length_laser)
+        self.save_path = save_model_path
+        self.best_lost = sys.float_info.max
         print ("encoder size:")
-        for parameter in encoder1.parameters():
+        for parameter in self.decoder.parameters():
             print (parameter.size())
         print ("decoder size:")
-        for parameter in attn_decoder1.parameters():
+        for parameter in self.decoder.parameters():
             print (parameter.size())
         print (use_cuda)
 
-        if use_cuda:
-            encoder1 = encoder1.cuda()
-            attn_decoder1 = attn_decoder1.cuda()
+        if os.path.isfile(resume_path+"encoder"):
+           self.encoder.load_state_dict (torch.load(resume_path+"encoder"))
+           self.decoder.load_state_dict (torch.load(resume_path+"decoder"))
+        else:
+            print("=> no checkpoint found at '{}'".format(resume_path))
+        self.trainIters(9000, print_every=10 )
 
-        self.trainIters(encoder1, attn_decoder1, 9000, print_every=10 )
-
-    def train(self, input_variable, target_variable, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
+    def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion,
               max_length=MAX_LENGTH):
-        encoder_hidden = encoder.initHidden()
+        encoder_hidden = self.encoder.initHidden()
 
         encoder_optimizer.zero_grad()
         decoder_optimizer.zero_grad()
@@ -126,12 +134,12 @@ class Model:
         target_length = target_variable.size()[0]
         input_length = input_variable.size()[0]
 
-        encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
+        encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
         loss = 0
         for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(
+            encoder_output, encoder_hidden = self.encoder(
                 input_variable[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0][0]
 
@@ -145,7 +153,7 @@ class Model:
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(
                     decoder_input, decoder_hidden, encoder_output, encoder_outputs)
                 loss += criterion(decoder_output, target_variable[di])
                 decoder_input = target_variable[di]  # Teacher forcing
@@ -153,7 +161,7 @@ class Model:
         else:
             # Without teacher forcing: use its own predictions as the next input
             for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(
                     decoder_input, decoder_hidden, encoder_output, encoder_outputs)
                 topv, topi = decoder_output.data.topk(1)
                 ni = topi[0][0]
@@ -185,14 +193,14 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+    def trainIters(self, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
         start = time.time()
         plot_losses = []
         print_loss_total = 0  # Reset every print_every
         plot_loss_total = 0  # Reset every plot_every
 
-        encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
-        decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+        encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
+        decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
 
         criterion = nn.NLLLoss()
 
@@ -203,8 +211,8 @@ class Model:
                 input_variable = training_pair[0]
                 target_variable = training_pair[1]
 
-                loss = self.train(input_variable, target_variable, encoder,
-                             decoder, encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
+                loss = self.train(input_variable, target_variable,
+                            encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
                 print_loss_total += loss
                 plot_loss_total += loss
 
@@ -216,8 +224,16 @@ class Model:
             plot_loss = plot_loss_total
             plot_losses.append(plot_loss)
             plot_loss_total = 0
-            print('%s (%d %fd%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
+            print('%s (%d %f%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
                                          iter, iter / float(n_iters) * 100, print_loss_total, print_loss_total/len(self.dataset.list_data)))
+            torch.save(self.encoder.state_dict(), self.save_path +  str(iter) + str(print_loss_total) + "encoder")
+            torch.save(self.decoder.state_dict(), self.save_path +  str(iter) + str(print_loss_total) + "decoder")
+
+            if (self.best_lost > print_loss_total):
+                self.best_lost = print_loss_total
+                torch.save(self.encoder.state_dict(), self.save_path + "_best_" + "encoder")
+                torch.save(self.decoder.state_dict(), self.save_path + "_best_" + "decoder")
+
             print_loss_total = 0
 
         self.showPlot(plot_losses)
