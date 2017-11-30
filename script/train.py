@@ -61,7 +61,7 @@ class AttnDecoderRNN(nn.Module):
         self.max_length = max_length
 
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = nn.Linear(self.     hidden_size * 2, self.max_length)
+        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
         self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
         self.dropout = nn.Dropout(self.dropout_p)
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
@@ -99,9 +99,10 @@ class Model:
     def __init__(self, dataset, save_model_path, resume_path = None, teacher_forcing_ratio = 0.5):
         self.dataset = dataset
 
-        hidden_size = 1024
+        hidden_size = 32
         self.encoder= EncoderRNN(1, hidden_size)
-        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,                                           1, dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words, 1,
+                                      dropout_p=0.1, max_length=self.dataset._max_length_laser)
         if use_cuda:
             self.encoder = self.encoder.cuda()
             self.decoder = self.decoder.cuda()
@@ -122,7 +123,8 @@ class Model:
            self.decoder.load_state_dict (torch.load(resume_path+"decoder"))
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
-        self.trainIters(9000, print_every=10 )
+        self.trainIters(1, print_every=10 )
+        self.evaluate(self.dataset._max_length_laser)
 
     def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion,
               max_length=MAX_LENGTH):
@@ -246,59 +248,69 @@ class Model:
         ax.yaxis.set_major_locator(loc)
         plt.plot(points)
 
-    # def evaluate(self, encoder, decoder, sentence, max_length=MAX_LENGTH):
-    #     input_variable = variableFromSentence(input_lang, sentence)
-    #     input_length = input_variable.size()[0]
-    #     encoder_hidden = encoder.initHidden()
-    #
-    #     encoder_outputs = (torch.zeros(max_length, encoder.hidden_size))
-    #     encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
-    #
-    #     for ei in range(input_lengtVariableh):
-    #         encoder_output, encoder_hidden = encoder(input_variable[ei],
-    #                                                  encoder_hidden)
-    #         encoder_outputs[ei] = encoder_outputs[ei] + encoder_output[0][0]
-    #
-    #     decoder_input = Variable(torch.LongTensor([[SOS_token]]))  # SOS
-    #     decoder_input = decoder_input.cuda() if use_cuda else decoder_input
-    #
-    #     decoder_hidden = encoder_hidden
-    #
-    #     decoded_words = []
-    #     decoder_attentions = torch.zeros(max_length, max_length)
-    #
-    #     for di in range(max_length):
-    #         decoder_output, decoder_hidden, decoder_attention = decoder(
-    #             decoder_input, decoder_hidden, encoder_output, encoder_outputs)
-    #         decoder_attentions[di] = decoder_attention.data
-    #         topv, topi = decoder_output.data.topk(1)
-    #         ni = topi[0][0]
-    #         if ni == EOS_token:
-    #             decoded_words.append('<EOS>')
-    #             break
-    #         else:
-    #             decoded_words.append(output_lang.index2word[ni])
-    #
-    #         decoder_input = Variable(torch.LongTensor([[ni]]))
-    #         decoder_input = decoder_input.cuda() if use_cuda else decoder_input
-    #
-    #     return decoded_words, decoder_attentions[:di + 1]
-    #
+    def evaluate(self, max_length=MAX_LENGTH):
+        self.dataset.shuffle_data()
+        training_pair = self.dataset.next_pair()
+        input_variable = training_pair[0]
+        input_length = input_variable.size()[0]
+        print('target: ')
+        sentences = []
+        expected_out = training_pair[1].data.cpu().numpy().reshape(-1)
+        for word in  expected_out:
+            sentences.append(self.dataset.lang.index2word[word])
+        print (" ".join(sentences))
+        print ("\n")
+        encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
+        encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
+        encoder_hidden = self.encoder.initHidden()
+        loss = 0
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = self.encoder(
+                input_variable[ei], encoder_hidden)
+            encoder_outputs[ei] = encoder_output[0][0]
 
-    ######################################################################
-    # We can evaluate random sentences from the training set and print out the
-    # input, target, and output to make some subjective quality judgements:
-    #
+        decoder_input = Variable(torch.LongTensor([[SOS_token]]))
+        decoder_input = decoder_input.cuda() if use_cuda else decoder_input
 
-    # def evaluateRandomly(self, encoder, decoder, n=10):
-    #     for i in range(n):
-    #         pair = random.choice(pairs)
-    #         print('>', pair[0])
-    #         print('=', pair[1])
-    #         output_words, attentions = self.evaluate(encoder, decoder, pair[0])
-    #         output_sentence = ' '.join(output_words)
-    #         print('<', output_sentence)
-    #         print('')
+        decoder_hidden = encoder_hidden
+
+        decoded_words = []
+        decoder_attentions = torch.zeros(max_length, max_length)
+
+        for di in range(max_length):
+            decoder_output, decoder_hidden, decoder_attention = self.decoder(
+                decoder_input, decoder_hidden, encoder_output, encoder_outputs)
+            decoder_attentions[di] = decoder_attention.data
+            topv, topi = decoder_output.data.topk(1)
+            ni = topi[0][0]
+            if ni == EOS_token:
+                decoded_words.append('<EOS>')
+                break
+            else:
+                decoded_words.append(self.dataset.lang.index2word[ni])
+
+            decoder_input = Variable(torch.LongTensor([[ni]]))
+            decoder_input = decoder_input.cuda() if use_cuda else decoder_input
+        output_sentence = ' '.join(decoded_words)
+        print("output: ", output_sentence)
+
+        plt.matshow(decoder_attentions[:di + 1].numpy())
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
+        fig.colorbar(cax)
+
+        # # Set up axes
+        # ax.set_xticklabels([''] + input_sentence.split(' ') +
+        #                    ['<EOS>'], rotation=90)
+        # ax.set_yticklabels([''] + output_words)
+
+        # Show label at every tick
+        # ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
+        # ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
+
+        plt.show()
+
 
 ######################################################################
 # Training and Evaluating

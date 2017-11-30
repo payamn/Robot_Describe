@@ -38,6 +38,36 @@ class Lang:
 
 
 class DataSet:
+    def __init__(self, directions, data_generation, is_data_generation):
+        self._list_iterator = 0
+        self.lock = threading.Lock()
+        self.list_data = []
+        self._directions = open(directions, 'r')
+        self._bag_num = 0
+        self._bag_name = data_generation
+        self._corner = []
+        self._left = []
+        self._right = []
+        self._forward = []
+        self._two_way = []
+        self._one_way = []
+        self._intersection = []
+        if is_data_generation:
+            self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
+            self.read_directions()
+            print self._corner
+            print self._left
+            print self._right
+            print self._forward
+            print self._intersection
+        else:
+            self._max_length_laser = 0
+            self.lang = Lang()
+            self._bag_num = 0 # means no bag read yet
+            rospy.loginfo("number of bag read: " + self._bag_name + str(self._bag_num+1))
+            self._bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
+            self.read_bag()
+
     def read_list_direction(self):
         list_temp = []
         line = self._directions.readline()
@@ -131,35 +161,7 @@ class DataSet:
 
         return laser, words
 
-    def __init__(self, directions, data_generation, is_data_generation):
-        self._list_iterator = 0
-        self.lock = threading.Lock()
-        self.list_data = []
-        self._directions = open(directions, 'r')
-        self._bag_num = 0
-        self._bag_name = data_generation
-        self._corner = []
-        self._left = []
-        self._right = []
-        self._forward = []
-        self._two_way = []
-        self._one_way = []
-        self._intersection = []
-        if is_data_generation:
-            self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
-            self.read_directions()
-            print self._corner
-            print self._left
-            print self._right
-            print self._forward
-            print self._intersection
-        else:
-            self._max_length_laser = 0
-            self.lang = Lang()
-            self._bag_num = 0 # means no bag read yet
-            rospy.loginfo("number of bag read: " + self._bag_name + str(self._bag_num+1))
-            self._bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
-            self.read_bag()
+
 
 
 
