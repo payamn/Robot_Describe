@@ -3,6 +3,8 @@ from robot import Robot
 from train import *
 import rospkg
 
+import subprocess
+roscore = subprocess.Popen('roscore')
 if __name__ == '__main__':
     rospy.init_node('listener', anonymous=True)
     robot = Robot(False)
