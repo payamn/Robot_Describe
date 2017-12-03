@@ -11,9 +11,24 @@ import rospkg
 from utility import *
 from robot import *
 
+prev_saved_laser = []
+diff_to_save_laser = 8
 
 def callback_laser_scan(scan, my_robot):
-    my_robot.data_set.write_bag("/robot_0/base_scan_1", scan)
+    global prev_saved_laser
+    if (len(prev_saved_laser)>0):
+        diff = 0
+        for i in range (len(prev_saved_laser)):
+            diff += abs(prev_saved_laser[i] - scan.ranges[i])
+        if diff > diff_to_save_laser:
+            prev_saved_laser = scan.ranges
+            my_robot.data_set.write_bag("/robot_0/base_scan_1", scan)
+            print "saving" + str(diff)
+        else:
+            print "not saving" + str(diff)
+    else:
+        prev_saved_laser = scan.ranges
+        my_robot.data_set.write_bag("/robot_0/base_scan_1", scan)
 
 
 def callback_robot_0(odom_data, my_robot):

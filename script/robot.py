@@ -24,7 +24,8 @@ class Robot:
         rospack = rospkg.RosPack()
 
         # get the file path for rospy_tutorials
-        self.remaining_intersection = random.randint(3, 7)
+        # self.remaining_intersection = random.randint(3, 7)
+        self.remaining_intersection = 1
         self.path = rospack.get_path('blob_follower')
         self.language_topic = "language"
         self.lock = threading.Lock()
@@ -61,8 +62,10 @@ class Robot:
         self.publisher.publish(target_goal_simple)
 
     def reset_intersection_collection(self):
-        self.remaining_intersection = random.randint(3, 7)
-        threading.Timer(random.uniform(0.5, 4.1), self.data_set.new_sequence).start()
+        # self.remaining_intersection = random.randint(3, 7)
+        self.remaining_intersection = 1
+        threading.Timer(0.5, self.data_set.new_sequence).start()
+        # threading.Timer(random.uniform(0.5, 1.8), self.data_set.new_sequence).start()
 
     def direction(self, degree):
         norm_degree = Utility.degree_norm(degree)*180/math.pi
@@ -79,8 +82,6 @@ class Robot:
         else:
             return "Turning around"
 
-        self.remaining_intersection = random.randint(3, 7)
-        threading.Timer(random.uniform(0.5, 4.1), self.data_set.new_sequence).start()
 
     def check_next_intersection(self):
         if Utility.distance_vector(self.list_intersection[self.next_pose].pose, self.pose) < intersection_r:

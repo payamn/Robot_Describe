@@ -117,6 +117,8 @@ class DataSet:
                 bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
 
                 rospy.logwarn("inside read bag: " + str(self._bag_num+1))
+                print (self._bag_name + str(self._bag_num+1))
+
                 for topic, msg, t in bag.read_messages(topics=['language', '/robot_0/base_scan_1']):
                     if topic == 'language':
                         rospy.loginfo(msg)
@@ -124,7 +126,7 @@ class DataSet:
                     else:
                         counter += 1
                         # ranges = tuple(int(100000 * x) for x in msg.ranges)
-                        data.laser.append(msg.ranges)
+                        data.laser.append([float(x)/msg.range_max for x in msg.ranges])
                 self._bag_num += 1
                 bag.close()
                 if len(data.laser) > self._max_length_laser:
@@ -137,8 +139,9 @@ class DataSet:
                 rospy.loginfo("number of bag read: " + str(self._bag_num) + "laser: " +str(counter))
                 break
 
+
     def new_sequence(self):
-        rospy.loginfo("saving " + str(self._bag_name) + str(self._bag_num))
+        rospy.logwarn("saving " + str(self._bag_name) + str(self._bag_num))
         self._bag.close()
         self._bag_num += 1
         self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')

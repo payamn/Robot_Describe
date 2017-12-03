@@ -31,12 +31,15 @@ class EncoderRNN(nn.Module):
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.input_size = 1
-        self.conv = nn.Conv1d(input_size, hidden_size, 5)
-        self.linear = nn.Linear(hidden_size*(90-4), self.hidden_size)
+        self.conv = nn.Conv1d(input_size, hidden_size, 7)
+        self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
+
+        self.linear = nn.Linear(hidden_size*(90-6), self.hidden_size)
         self.gru = nn.GRU(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
         conv = self.conv(input.view(1, 1, 90))
+        # conv = self.conv2(conv)
         linear = conv.view(1, 1, -1)
         output = self.linear(linear)
         for i in range(self.n_layers):
@@ -99,7 +102,7 @@ class Model:
     def __init__(self, dataset, save_model_path, resume_path = None, teacher_forcing_ratio = 0.5):
         self.dataset = dataset
 
-        hidden_size = 32
+        hidden_size = 1024
         self.encoder= EncoderRNN(1, hidden_size)
         self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words, 1,
                                       dropout_p=0.1, max_length=self.dataset._max_length_laser)
@@ -123,15 +126,20 @@ class Model:
            self.decoder.load_state_dict (torch.load(resume_path+"decoder"))
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
-        self.trainIters(1, print_every=10 )
+        plt.ion()
+
+        self.trainIters(30, print_every=10 )
         self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        raw_input("end")
+
 
     def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion,
               max_length=MAX_LENGTH):
         encoder_hidden = self.encoder.initHidden()
 
-        encoder_optimizer.zero_grad()
-        decoder_optimizer.zero_grad()
+        loss = 0
 
         target_length = target_variable.size()[0]
         input_length = input_variable.size()[0]
@@ -139,7 +147,6 @@ class Model:
         encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
-        loss = 0
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
                 input_variable[ei], encoder_hidden)
@@ -175,13 +182,10 @@ class Model:
                 if ni == EOS_token:
                     break
 
-        loss.backward()
+        # loss.backward()
 
-        encoder_optimizer.step()
-        decoder_optimizer.step()
-
-        return loss.data[0] / target_length
-
+        # return loss.data[0] / target_length
+        return loss
     @staticmethod
     def asMinutes(s):
         m = math.floor(s / 60)
@@ -195,37 +199,47 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=16, learning_rate=0.0001):
         start = time.time()
         plot_losses = []
-        print_loss_total = 0  # Reset every print_every
-        plot_loss_total = 0  # Reset every plot_every
-
-        encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
+        print_loss_total = 0
+        plot_loss_total = 0
 
         criterion = nn.NLLLoss()
 
         for iter in range(1, n_iters + 1):
+            print("learning rate: {}".format(learning_rate))
+            encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
+            decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
             self.dataset.shuffle_data()
-            for d in range(1, len(self.dataset.list_data)+1):
-                training_pair = self.dataset.next_pair()
-                input_variable = training_pair[0]
-                target_variable = training_pair[1]
+            learning_rate *= 0.92
+            for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))):
 
-                loss = self.train(input_variable, target_variable,
-                            encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
-                print_loss_total += loss
-                plot_loss_total += loss
+                encoder_optimizer.zero_grad()
+                decoder_optimizer.zero_grad()
+                loss = 0
+                for d in range(1,batch_size+1):
+                    training_pair = self.dataset.next_pair()
+                    input_variable = training_pair[0]
+                    target_variable = training_pair[1]
 
-                if d % print_every == 0:
-                    print_loss_avg = print_loss_total / d
-                    print('epoch %d %s (%d %.2f%%) %.4f' % (iter, self.timeSince(start, d / len(self.dataset.list_data)),
-                                                 d, float(d) / len(self.dataset.list_data) * 100, print_loss_avg))
+                    loss+= self.train(input_variable, target_variable,
+                                encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
 
-            plot_loss = plot_loss_total
-            plot_losses.append(plot_loss)
-            plot_loss_total = 0
+                    print_loss_total += loss.data[0]/target_variable.size()[0]
+                    plot_loss_total += loss.data[0]/target_variable.size()[0]
+
+
+                print_loss_avg = print_loss_total / (batch_size*batch)
+                print('epoch %d %s (%d %.2f%%) %.4f' % (iter, self.timeSince(start, batch / (len(self.dataset.list_data)/batch_size)),
+                                             d, float(batch) / (len(self.dataset.list_data)/batch_size) * 100, print_loss_avg))
+                loss.backward()
+                encoder_optimizer.step()
+                decoder_optimizer.step()
+                plot_loss = plot_loss_total
+                plot_losses.append(plot_loss)
+                plot_loss_total = 0
+
             print('%s (%d %f%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
                                          iter, iter / float(n_iters) * 100, print_loss_total, print_loss_total/len(self.dataset.list_data)))
             torch.save(self.encoder.state_dict(), self.save_path +  str(iter) + str(print_loss_total) + "encoder")
@@ -241,11 +255,11 @@ class Model:
         self.showPlot(plot_losses)
 
     def showPlot(self, points):
-        plt.figure()
-        fig, ax = plt.subplots()
-        # this locator puts ticks at regular intervals
-        loc = ticker.MultipleLocator(base=0.2)
-        ax.yaxis.set_major_locator(loc)
+        # plt.figure()
+        # fig, ax = plt.subplots()
+        # # this locator puts ticks at regular intervals
+        # loc = ticker.MultipleLocator(base=0.2)
+        # ax.yaxis.set_major_locator(loc)
         plt.plot(points)
 
     def evaluate(self, max_length=MAX_LENGTH):
