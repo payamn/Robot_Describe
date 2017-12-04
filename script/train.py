@@ -26,7 +26,7 @@ MAX_LENGTH = 10
 
 
 class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, n_layers=1):
+    def __init__(self, input_size, hidden_size, n_layers=2):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
@@ -55,7 +55,7 @@ class EncoderRNN(nn.Module):
 
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, n_layers=1, dropout_p=0.1, max_length=MAX_LENGTH):
+    def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
         super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -104,7 +104,7 @@ class Model:
 
         hidden_size = 1024
         self.encoder= EncoderRNN(1, hidden_size)
-        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words, 1,
+        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
                                       dropout_p=0.1, max_length=self.dataset._max_length_laser)
         if use_cuda:
             self.encoder = self.encoder.cuda()
@@ -128,7 +128,7 @@ class Model:
             print("=> no checkpoint found at '{}'".format(resume_path))
         plt.ion()
 
-        self.trainIters(30, print_every=10 )
+        self.trainIters(100, print_every=10 )
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
@@ -199,7 +199,7 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=16, learning_rate=0.0001):
+    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=32, learning_rate=0.002):
         start = time.time()
         plot_losses = []
         print_loss_total = 0
@@ -212,7 +212,7 @@ class Model:
             encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
             decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
             self.dataset.shuffle_data()
-            learning_rate *= 0.92
+            learning_rate *= 0.96
             for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))):
 
                 encoder_optimizer.zero_grad()
@@ -314,72 +314,4 @@ class Model:
         cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
         fig.colorbar(cax)
 
-        # # Set up axes
-        # ax.set_xticklabels([''] + input_sentence.split(' ') +
-        #                    ['<EOS>'], rotation=90)
-        # ax.set_yticklabels([''] + output_words)
-
-        # Show label at every tick
-        # ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-        # ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-
         plt.show()
-
-
-######################################################################
-# Training and Evaluating
-# =======================
-#
-# With all these helper functions in place (it looks like extra work, but
-# it's easier to run multiple experiments easier) we can actually
-# initialize a network and start training.
-#
-# Remember that the input sentences were heavily filtered. For this small
-# dataset we can use relatively small networks of 256 hidden nodes and a
-# single GRU layer. After about 40 minutes on a MacBook CPU we'll get some
-# reasonable results.
-#
-# .. Note::
-#    If you run this notebook you can train, interrupt the kernel,
-#    evaluate, and continue training later. Comment out the lines where the
-#    encoder and decoder are initialized and run ``trainIters`` again.
-#
-
-
-
-######################################################################
-#
-#
-# evaluateRandomly(encoder1, attn_decoder1)
-
-
-# output_words, attentions = evaluate(
-#     encoder1, attn_decoder1, "je suis trop froid .")
-# plt.matshow(attentions.numpy())
-
-
-# def showAttention(input_sentence, output_words, attentions):
-#     # Set up figure with colorbar
-#     fig = plt.figure()
-#     ax = fig.add_subplot(111)
-#     cax = ax.matshow(attentions.numpy(), cmap='bone')
-#     fig.colorbar(cax)
-#
-#     # Set up axes
-#     ax.set_xticklabels([''] + input_sentence.split(' ') +
-#                        ['<EOS>'], rotation=90)
-#     ax.set_yticklabels([''] + output_words)
-#
-#     # Show label at every tick
-#     ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-#     ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-#
-#     plt.show()
-
-
-# def evaluateAndShowAttention(input_sentence):
-#     output_words, attentions = evaluate(
-#         encoder1, attn_decoder1, input_sentence)
-#     print('input =', input_sentence)
-#     print('output =', ' '.join(output_words))
-#     showAttention(input_sentence, output_words, attentions)
