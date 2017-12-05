@@ -17,19 +17,20 @@ class IntersectionNode:
 
 
 class Robot:
-    def __init__(self, is_data_generation):
+    def __init__(self, is_data_generation, data_set_ver):
         random.seed()
 
-        # get an instance of RosPack with the default search paths
         rospack = rospkg.RosPack()
-
-        # get the file path for rospy_tutorials
-        # self.remaining_intersection = random.randint(3, 7)
+        self.data_set_ver = data_set_ver
         self.remaining_intersection = 1
         self.path = rospack.get_path('blob_follower')
         self.language_topic = "language"
         self.lock = threading.Lock()
-        self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation)
+        if data_set_ver == 1:
+            self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation)
+        else:
+            self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag_2/bag_", is_data_generation)
+
         self.list_intersection = []
         self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y - 4]),
                                                        array([1, 5])))
@@ -48,18 +49,31 @@ class Robot:
         self.pose = self.list_intersection[0].pose
         self.publisher = rospy.Publisher('/move_base/goal', MoveBaseActionGoal, queue_size=10, latch=True)
         target_goal_simple = MoveBaseActionGoal()
+        self.lock = threading.Lock()
 
-        # publish a goal for move base to navigate to intersection 0 for start
-        target_goal_simple.goal.target_pose.pose.position.x = \
-            self.list_intersection[0].pose[0]
-        target_goal_simple.goal.target_pose.pose.position.y = \
-            self.list_intersection[0].pose[1]
+        self.remaining_laser_scan = 20              # start with 20 which means wait for 20 laser scan as the array empty
+        self.laser_scans = [0 for x in range(20)]   # allocate 20 space for 20 laser scan
+        self.laser_pointer = 0                      # index to add new laser scan
+
+        target_goal_simple.goal.target_pose.pose.position.x = self.list_intersection[0].pose[0]
+        target_goal_simple.goal.target_pose.pose.position.y = self.list_intersection[0].pose[1]
         target_goal_simple.goal.target_pose.pose.position.z = 0
         target_goal_simple.goal.target_pose.pose.orientation.w = 1
         target_goal_simple.goal.target_pose.header.frame_id = 'map'
         target_goal_simple.goal.target_pose.header.stamp = rospy.Time.now()
         target_goal_simple.header.stamp = rospy.Time.now()
         self.publisher.publish(target_goal_simple)
+
+    def save_laser_scan(self, scan):
+        self.lock.acquire()
+        self.laser_scans[self.laser_pointer] = scan
+        self.laser_scans = (self.laser_scans + 1) % 20
+        self.remaining_laser_scan -= 1
+        if (self.remaining_laser_scan == 0):        # getting to limit so save the bag files
+            self.remaining_laser_scan = 10
+            for i in range (20):
+                self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % 20])
+        self.lock.release()
 
     def reset_intersection_collection(self):
         # self.remaining_intersection = random.randint(3, 7)

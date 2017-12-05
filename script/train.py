@@ -199,7 +199,7 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=32, learning_rate=0.002):
+    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=32, learning_rate=0.001):
         start = time.time()
         plot_losses = []
         print_loss_total = 0
