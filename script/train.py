@@ -128,7 +128,7 @@ class Model:
             print("=> no checkpoint found at '{}'".format(resume_path))
         plt.ion()
 
-        self.trainIters(100, print_every=10 )
+        self.trainIters(0, print_every=10 )
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)

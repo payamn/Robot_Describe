@@ -30,7 +30,7 @@ class Robot:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation)
         else:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag_2/bag_", is_data_generation)
-
+        self.self.lang_bag_str = ""
         self.list_intersection = []
         self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y - 4]),
                                                        array([1, 5])))
@@ -97,7 +97,7 @@ class Robot:
             return "Turning around"
 
 
-    def check_next_intersection(self):
+    def check_next_intersection(self, dataset_ver):
         if Utility.distance_vector(self.list_intersection[self.next_pose].pose, self.pose) < intersection_r:
             num_ways = len(self.list_intersection[self.next_pose].connection)
             eligible_neighbor = []
@@ -119,16 +119,19 @@ class Robot:
                 str_msg.data = self.data_set.get_intersection()
                 index = random.randint(0, 1)
 
-            self.data_set.write_bag(self.language_topic, str_msg)
-            rospy.logerr(len(eligible_neighbor))
-            rospy.logerr(len(self.list_intersection))
-            rospy.logerr(index)
+            if (dataset_ver == 1):
+                self.data_set.write_bag(self.language_topic, str_msg)
+            elif(dataset_ver == 2):
+                self.lang_bag_str= str_msg
 
             bc = pose_intersection - self.list_intersection[eligible_neighbor[index]].pose
             degree = Utility.degree_vector(ab, bc)
             str_msg = String()
             str_msg.data = self.direction(degree)
-            self.data_set.write_bag(self.language_topic, str_msg)
+            if (dataset_ver == 1):
+                self.data_set.write_bag(self.language_topic, str_msg)
+            elif(dataset_ver == 2):
+                self.lang_bag_str= self.lang_bag_str + " " + str_msg
 
             self.prev_pose = self.next_pose
             self.next_pose = eligible_neighbor[index]
@@ -149,3 +152,5 @@ class Robot:
             self.remaining_intersection -= 1
             if self.remaining_intersection == 0:
                 self.reset_intersection_collection()
+        else:
+            self.lang_bag_str = "continue sterieght"
