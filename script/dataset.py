@@ -141,10 +141,13 @@ class DataSet:
 
 
     def new_sequence(self):
+        self.lock.acquire()
         rospy.logwarn("saving " + str(self._bag_name) + str(self._bag_num))
         self._bag.close()
         self._bag_num += 1
         self._bag = rosbag.Bag(self._bag_name + str(self._bag_num), 'w')
+        self.lock.release()
+
 
     def shuffle_data(self):
         random.shuffle(self.list_data)

@@ -26,11 +26,12 @@ class Robot:
         self.path = rospack.get_path('blob_follower')
         self.language_topic = "language"
         self.lock = threading.Lock()
+        self.not_change = 0
         if data_set_ver == 1:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation)
         else:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag_2/bag_", is_data_generation)
-        self.self.lang_bag_str = ""
+        self.lang_bag_str = String()
         self.list_intersection = []
         self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y - 4]),
                                                        array([1, 5])))
@@ -51,8 +52,8 @@ class Robot:
         target_goal_simple = MoveBaseActionGoal()
         self.lock = threading.Lock()
 
-        self.remaining_laser_scan = 20              # start with 20 which means wait for 20 laser scan as the array empty
-        self.laser_scans = [0 for x in range(20)]   # allocate 20 space for 20 laser scan
+        self.remaining_laser_scan = 40              # start with 40 which means wait for 40 laser scan as the array empty
+        self.laser_scans = [0 for x in range(40)]   # allocate 40 space for 40 laser scan
         self.laser_pointer = 0                      # index to add new laser scan
 
         target_goal_simple.goal.target_pose.pose.position.x = self.list_intersection[0].pose[0]
@@ -64,15 +65,26 @@ class Robot:
         target_goal_simple.header.stamp = rospy.Time.now()
         self.publisher.publish(target_goal_simple)
 
-    def save_laser_scan(self, scan):
+    def save_bag_scan_laser(self, scan):
         self.lock.acquire()
         self.laser_scans[self.laser_pointer] = scan
-        self.laser_scans = (self.laser_scans + 1) % 20
+        self.laser_pointer = (self.laser_pointer + 1) % 40
+
         self.remaining_laser_scan -= 1
         if (self.remaining_laser_scan == 0):        # getting to limit so save the bag files
-            self.remaining_laser_scan = 10
-            for i in range (20):
-                self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % 20])
+            if (self.lang_bag_str.data == "continue straight" and random.uniform(0, 1.0) > 0.5):
+                self.remaining_laser_scan = 40
+                self.lock.release()
+                return
+            rospy.logerr(self.lang_bag_str.data)
+            self.data_set.write_bag(self.language_topic, self.lang_bag_str)
+            self.remaining_laser_scan = 40
+            for i in range (40):
+                self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % 40])
+            threading.Timer(0.0, self.data_set.new_sequence).start()
+            if self.not_change > 0:
+                self.remaining_laser_scan = 1
+                self.not_change -= 1
         self.lock.release()
 
     def reset_intersection_collection(self):
@@ -83,7 +95,6 @@ class Robot:
 
     def direction(self, degree):
         norm_degree = Utility.degree_norm(degree)*180/math.pi
-        rospy.logerr(norm_degree)
         if Utility.in_threshold(norm_degree, 90, degree_delta):
             return self.data_set.get_right()
 
@@ -97,7 +108,7 @@ class Robot:
             return "Turning around"
 
 
-    def check_next_intersection(self, dataset_ver):
+    def check_next_intersection(self):
         if Utility.distance_vector(self.list_intersection[self.next_pose].pose, self.pose) < intersection_r:
             num_ways = len(self.list_intersection[self.next_pose].connection)
             eligible_neighbor = []
@@ -119,19 +130,22 @@ class Robot:
                 str_msg.data = self.data_set.get_intersection()
                 index = random.randint(0, 1)
 
-            if (dataset_ver == 1):
+            if (self.data_set_ver == 1):
                 self.data_set.write_bag(self.language_topic, str_msg)
-            elif(dataset_ver == 2):
+            elif(self.data_set_ver == 2):
                 self.lang_bag_str= str_msg
+
+            self.remaining_laser_scan = random.randint(3, 7)      # make sure we have enough data before saving new sequence
+            self.not_change = 5
 
             bc = pose_intersection - self.list_intersection[eligible_neighbor[index]].pose
             degree = Utility.degree_vector(ab, bc)
             str_msg = String()
             str_msg.data = self.direction(degree)
-            if (dataset_ver == 1):
+            if (self.data_set_ver == 1):
                 self.data_set.write_bag(self.language_topic, str_msg)
-            elif(dataset_ver == 2):
-                self.lang_bag_str= self.lang_bag_str + " " + str_msg
+            elif(self.data_set_ver == 2):
+                self.lang_bag_str.data = self.lang_bag_str.data + " " + str_msg.data
 
             self.prev_pose = self.next_pose
             self.next_pose = eligible_neighbor[index]
@@ -150,7 +164,8 @@ class Robot:
             target_goal_simple.header.stamp = rospy.Time.now()
             self.publisher.publish(target_goal_simple)
             self.remaining_intersection -= 1
-            if self.remaining_intersection == 0:
+            if self.remaining_intersection == 0 and self.data_set_ver ==1:
                 self.reset_intersection_collection()
         else:
-            self.lang_bag_str = "continue sterieght"
+            if self.not_change <= 0:
+                self.lang_bag_str.data = "continue straight"

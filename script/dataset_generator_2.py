@@ -12,7 +12,7 @@ from utility import *
 from robot import *
 
 def callback_laser_scan(scan, my_robot):
-    my_robot.save_laser_scan(scan)
+    my_robot.save_bag_scan_laser(scan)
 
 def callback_robot_0(odom_data, my_robot):
     pose = odom_data.pose.pose.position

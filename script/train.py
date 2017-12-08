@@ -128,7 +128,21 @@ class Model:
             print("=> no checkpoint found at '{}'".format(resume_path))
         plt.ion()
 
-        self.trainIters(0, print_every=10 )
+        self.trainIters(100, print_every=10 )
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
+        self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
         self.evaluate(self.dataset._max_length_laser)
@@ -199,7 +213,7 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=32, learning_rate=0.001):
+    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001):
         start = time.time()
         plot_losses = []
         print_loss_total = 0
@@ -213,7 +227,8 @@ class Model:
             decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
             self.dataset.shuffle_data()
             learning_rate *= 0.96
-            for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))):
+            print (int(round(len(self.dataset.list_data)/batch_size)))
+            for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))+1):
 
                 encoder_optimizer.zero_grad()
                 decoder_optimizer.zero_grad()

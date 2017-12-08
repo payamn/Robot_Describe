@@ -10,6 +10,6 @@ except:
     roscore = subprocess.Popen('roscore')
 if __name__ == '__main__':
     rospy.init_node('listener', anonymous=True)
-    robot = Robot(False, 1)
-    my_model = Model(robot.data_set, rospkg.RosPack().get_path('blob_follower') + "/check_points/",
-                     resume_path=rospkg.RosPack().get_path('blob_follower') + "/check_points/" +"_best_" ,teacher_forcing_ratio=0.5)
+    robot = Robot(False, 2)
+    my_model = Model(robot.data_set, rospkg.RosPack().get_path('blob_follower') + "/check_points_2/",
+                     resume_path=rospkg.RosPack().get_path('blob_follower') + "/check_points_2/" +"_best_" ,teacher_forcing_ratio=0.5)
