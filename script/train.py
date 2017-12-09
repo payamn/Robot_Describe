@@ -164,9 +164,10 @@ class Model:
             self.decoder.load_state_dict(torch.load(resume_path + "decoder"))
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
-        self.trainIters(100, model_ver=model_ver, print_every=10)
+        self.trainIters(0, model_ver=model_ver, print_every=10)
 
-        for i in range(10):
+        self.dataset.shuffle_data()
+        for i in range(len(self.dataset.list_data)):
             self.evaluate(model_ver, self.dataset._max_length_laser)
 
         raw_input("end")
@@ -299,17 +300,15 @@ class Model:
         plt.plot(points)
 
     def evaluate(self, model_ver=1, max_length=MAX_LENGTH):
-        self.dataset.shuffle_data()
         training_pair = self.dataset.next_pair()
         input_variable = training_pair[0]
         input_length = input_variable.size()[0]
-        print('target: ')
+
         sentences = []
         expected_out = training_pair[1].data.cpu().numpy().reshape(-1)
         for word in  expected_out:
             sentences.append(self.dataset.lang.index2word[word])
-        print (" ".join(sentences))
-        print ("\n")
+
         encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
         encoder_hidden = self.encoder.initHidden()
@@ -342,14 +341,44 @@ class Model:
 
             decoder_input = Variable(torch.LongTensor([[ni]]))
             decoder_input = decoder_input.cuda() if use_cuda else decoder_input
-        output_sentence = ' '.join(decoded_words)
-        print("output: ", output_sentence)
-        if (model_ver == 1):
-            plt.matshow(decoder_attentions[:di + 1].numpy())
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        if (model_ver == 1):
-            cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
-            fig.colorbar(cax)
+        corner = 0
+        left = 0
+        forward = 0
+        two_way = 0
+        streight = 0
+        const = 1
+        for words in [decoded_words, sentences]:
+            const *= -1
+            for w in words:
+                if w == "continue":
+                    streight += const
+                    break
+                if w == "left":
+                    left += const
+                if w == "right":
+                    left -= const
+                if w == "forward":
+                    forward += const
+                if w == "two":
+                    two_way += const
+                if w == "one" or w == "no":
+                    two_way -= const
+                if w == "intersection":
+                    corner -= const
+                if w == "corner":
+                    corner += const
 
-        plt.show()
+        output_sentence = ' '.join(decoded_words)
+        if corner != 0 or left != 0 or forward != 0 or two_way != 0 or streight != 0 or const != 1:
+            print("output: ", output_sentence)
+            print("target: ", " ".join(sentences))
+
+        # if (model_ver == 1):
+        #     plt.matshow(decoder_attentions[:di + 1].numpy())
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        # if (model_ver == 1):
+        #     cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
+        #     fig.colorbar(cax)
+        #
+        # plt.show()
