@@ -164,15 +164,18 @@ class Model:
             self.decoder.load_state_dict(torch.load(resume_path + "decoder"))
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
-        self.trainIters(0, model_ver=model_ver, print_every=10)
+        print ("model version %d" %model_ver)
+        self.trainIters(1000, model_ver=model_ver, print_every=10)
 
         self.dataset.shuffle_data()
-        for i in range(len(self.dataset.list_data)):
-            self.evaluate(model_ver, self.dataset._max_length_laser)
+        error = 0
+        for i in range(20):
+            error += self.evaluate(model_ver, self.dataset._max_length_laser)
 
+        print ("accu: {}", float(error)/20)
         raw_input("end")
 
-    def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion, model_ver=1,
+    def train(self, input_variable, target_variable, criterion, model_ver=1,
               max_length=MAX_LENGTH):
 
         loss = 0
@@ -235,20 +238,30 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001):
+    def adjust_learning_rate(self, optimizer, epoch, learning_rate):
+        """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
+        lr = learning_rate  * (0.1 ** (epoch // 10))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=100, learning_rate=0.001):
         start = time.time()
         plot_losses = []
-        print_loss_total = 0
-        plot_loss_total = 0
+
 
         criterion = nn.NLLLoss()
+        encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
+        decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
 
         for iter in range(1, n_iters + 1):
-            print("learning rate: {}".format(learning_rate))
-            encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
-            decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
+            print_loss_total = 0
+            plot_loss_total = 0
+            # print("learning rate: {}".format(learning_rate))
+            self.adjust_learning_rate(decoder_optimizer, iter, learning_rate)
+            self.adjust_learning_rate(encoder_optimizer, iter, learning_rate)
+            for param_group in decoder_optimizer.param_groups:
+                print ("lr: ", param_group['lr'])
             self.dataset.shuffle_data()
-            learning_rate *= 0.96
             print (int(round(len(self.dataset.list_data)/batch_size)))
             for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))+1):
 
@@ -261,7 +274,7 @@ class Model:
                     target_variable = training_pair[1]
 
                     loss += self.train(input_variable, target_variable,
-                                encoder_optimizer, decoder_optimizer, criterion,2, self.dataset._max_length_laser)
+                                criterion,model_ver, self.dataset._max_length_laser)
 
                     print_loss_total += loss.data[0]/target_variable.size()[0]
                     plot_loss_total += loss.data[0]/target_variable.size()[0]
@@ -287,7 +300,13 @@ class Model:
                 torch.save(self.encoder.state_dict(), self.save_path + "_best_" + "encoder")
                 torch.save(self.decoder.state_dict(), self.save_path + "_best_" + "decoder")
 
-            print_loss_total = 0
+            if (iter % 10 == 0):
+                self.dataset.shuffle_data()
+                error = 0
+                for i in range(50):
+                    error += self.evaluate(model_ver, self.dataset._max_length_laser)
+                print('acc: %f)' % (1- float(error)/50))
+
 
         self.showPlot(plot_losses)
 
@@ -370,8 +389,11 @@ class Model:
 
         output_sentence = ' '.join(decoded_words)
         if corner != 0 or left != 0 or forward != 0 or two_way != 0 or streight != 0 or const != 1:
-            print("output: ", output_sentence)
-            print("target: ", " ".join(sentences))
+            print ("output: ", output_sentence)
+            print ("target: ", " ".join(sentences))
+            print ()
+            return 1
+        return 0
 
         # if (model_ver == 1):
         #     plt.matshow(decoder_attentions[:di + 1].numpy())
