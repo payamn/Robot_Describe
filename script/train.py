@@ -30,7 +30,7 @@ class EncoderRNN(nn.Module):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
-        self.input_size = 1
+        self.input_size = input_size
         self.conv = nn.Conv1d(input_size, hidden_size, 7)
         self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
 
@@ -54,6 +54,39 @@ class EncoderRNN(nn.Module):
             return result
 
 
+class DecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
+        super(DecoderRNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.dropout_p = dropout_p
+        self.max_length = max_length
+        self.linear = nn.Linear(hidden_size*(max_length+1), self.hidden_size)
+
+        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
+        self.dropout = nn.Dropout(self.dropout_p)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, input, hidden, encoder_outputs):
+        embedded = self.embedding(input).view(1, 1, -1)
+        embedded = self.dropout(embedded)
+        encoder_outputs = encoder_outputs.view(1, 1, -1)
+        concat = torch.cat((embedded[0], encoder_outputs[0]), 1)
+
+        output = concat.unsqueeze(0)
+        output = self.linear(output)
+
+        for i in range(self.n_layers):
+            output = F.relu(output)
+            output, hidden = self.gru(output, hidden)
+
+        output = F.log_softmax(self.out(output[0]))
+        return output, hidden, None
+
+
+
 class AttnDecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
         super(AttnDecoderRNN, self).__init__()
@@ -70,7 +103,7 @@ class AttnDecoderRNN(nn.Module):
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
-    def forward(self, input, hidden, encoder_output, encoder_outputs):
+    def forward(self, input, hidden, encoder_outputs):
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
         concat = torch.cat((embedded[0], hidden[0]), 1)
@@ -99,65 +132,53 @@ class AttnDecoderRNN(nn.Module):
 
 
 class Model:
-    def __init__(self, dataset, save_model_path, resume_path = None, teacher_forcing_ratio = 0.5):
-        self.dataset = dataset
+    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5):
 
-        hidden_size = 1024
-        self.encoder= EncoderRNN(1, hidden_size)
-        self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
-                                      dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        self.dataset = dataset
+        plt.ion()
+        hidden_size = 512
+        self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.save_path = save_model_path
+        self.best_lost = sys.float_info.max
+        self.encoder = EncoderRNN(1, hidden_size)
+        if model_ver == 1:
+            self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
+                                          dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        if model_ver == 2:
+            self.decoder = DecoderRNN(hidden_size, self.dataset.lang.n_words,
+                                          dropout_p=0.1, max_length=self.dataset._max_length_laser)
+
         if use_cuda:
             self.encoder = self.encoder.cuda()
             self.decoder = self.decoder.cuda()
 
-        self.teacher_forcing_ratio = teacher_forcing_ratio
-        self.save_path = save_model_path
-        self.best_lost = sys.float_info.max
-        print ("encoder size:")
+        print("encoder size:")
         for parameter in self.decoder.parameters():
-            print (parameter.size())
-        print ("decoder size:")
+            print(parameter.size())
+        print("decoder size:")
         for parameter in self.decoder.parameters():
-            print (parameter.size())
-        print (use_cuda)
+            print(parameter.size())
 
-        if os.path.isfile(resume_path+"encoder"):
-           self.encoder.load_state_dict (torch.load(resume_path+"encoder"))
-           self.decoder.load_state_dict (torch.load(resume_path+"decoder"))
+        if os.path.isfile(resume_path + "encoder"):
+            self.encoder.load_state_dict(torch.load(resume_path + "encoder"))
+            self.decoder.load_state_dict(torch.load(resume_path + "decoder"))
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
-        plt.ion()
+        self.trainIters(100, model_ver=model_ver, print_every=10)
 
-        self.trainIters(100, print_every=10 )
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
-        self.evaluate(self.dataset._max_length_laser)
+        for i in range(10):
+            self.evaluate(model_ver, self.dataset._max_length_laser)
+
         raw_input("end")
 
-
-    def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion,
+    def train(self, input_variable, target_variable, encoder_optimizer, decoder_optimizer, criterion, model_ver=1,
               max_length=MAX_LENGTH):
-        encoder_hidden = self.encoder.initHidden()
 
         loss = 0
-
         target_length = target_variable.size()[0]
         input_length = input_variable.size()[0]
 
+        encoder_hidden = self.encoder.initHidden()
         encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
@@ -177,7 +198,7 @@ class Model:
             # Teacher forcing: Feed the target as the next input
             for di in range(target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                    decoder_input, decoder_hidden, encoder_output, encoder_outputs)
+                    decoder_input, decoder_hidden, encoder_outputs)
                 loss += criterion(decoder_output, target_variable[di])
                 decoder_input = target_variable[di]  # Teacher forcing
 
@@ -185,7 +206,7 @@ class Model:
             # Without teacher forcing: use its own predictions as the next input
             for di in range(target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                    decoder_input, decoder_hidden, encoder_output, encoder_outputs)
+                    decoder_input, decoder_hidden, encoder_outputs)
                 topv, topi = decoder_output.data.topk(1)
                 ni = topi[0][0]
 
@@ -213,7 +234,7 @@ class Model:
         rs = es - s
         return '%s (- %s)' % (self.asMinutes(s), self.asMinutes(rs))
 
-    def trainIters(self, n_iters, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001):
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001):
         start = time.time()
         plot_losses = []
         print_loss_total = 0
@@ -238,8 +259,8 @@ class Model:
                     input_variable = training_pair[0]
                     target_variable = training_pair[1]
 
-                    loss+= self.train(input_variable, target_variable,
-                                encoder_optimizer, decoder_optimizer, criterion, self.dataset._max_length_laser)
+                    loss += self.train(input_variable, target_variable,
+                                encoder_optimizer, decoder_optimizer, criterion,2, self.dataset._max_length_laser)
 
                     print_loss_total += loss.data[0]/target_variable.size()[0]
                     plot_loss_total += loss.data[0]/target_variable.size()[0]
@@ -277,7 +298,7 @@ class Model:
         # ax.yaxis.set_major_locator(loc)
         plt.plot(points)
 
-    def evaluate(self, max_length=MAX_LENGTH):
+    def evaluate(self, model_ver=1, max_length=MAX_LENGTH):
         self.dataset.shuffle_data()
         training_pair = self.dataset.next_pair()
         input_variable = training_pair[0]
@@ -308,8 +329,9 @@ class Model:
 
         for di in range(max_length):
             decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                decoder_input, decoder_hidden, encoder_output, encoder_outputs)
-            decoder_attentions[di] = decoder_attention.data
+                decoder_input, decoder_hidden, encoder_outputs)
+            if (model_ver==1):
+                decoder_attentions[di] = decoder_attention.data
             topv, topi = decoder_output.data.topk(1)
             ni = topi[0][0]
             if ni == EOS_token:
@@ -322,11 +344,12 @@ class Model:
             decoder_input = decoder_input.cuda() if use_cuda else decoder_input
         output_sentence = ' '.join(decoded_words)
         print("output: ", output_sentence)
-
-        plt.matshow(decoder_attentions[:di + 1].numpy())
+        if (model_ver == 1):
+            plt.matshow(decoder_attentions[:di + 1].numpy())
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
-        fig.colorbar(cax)
+        if (model_ver == 1):
+            cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
+            fig.colorbar(cax)
 
         plt.show()
