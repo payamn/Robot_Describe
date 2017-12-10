@@ -136,7 +136,7 @@ class Model:
 
         self.dataset = dataset
         plt.ion()
-        hidden_size = 512
+        hidden_size = 1000
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.save_path = save_model_path
         self.best_lost = sys.float_info.max
@@ -165,14 +165,14 @@ class Model:
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
         print ("model version %d" %model_ver)
-        self.trainIters(1000, model_ver=model_ver, print_every=10)
+        self.trainIters(50, model_ver=model_ver, print_every=10)
 
         self.dataset.shuffle_data()
         error = 0
-        for i in range(20):
-            error += self.evaluate(model_ver, self.dataset._max_length_laser)
+        for i in range(100):
+            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
 
-        print ("accu: {}", float(error)/20)
+        print ("accu: {}", float(error)/100)
         raw_input("end")
 
     def train(self, input_variable, target_variable, criterion, model_ver=1,
@@ -240,11 +240,11 @@ class Model:
 
     def adjust_learning_rate(self, optimizer, epoch, learning_rate):
         """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
-        lr = learning_rate  * (0.1 ** (epoch // 10))
+        lr = learning_rate  * (0.92 ** (epoch // 2))
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=100, learning_rate=0.001):
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.0001):
         start = time.time()
         plot_losses = []
 
@@ -292,20 +292,20 @@ class Model:
 
             print('%s (%d %f%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
                                          iter, iter / float(n_iters) * 100, print_loss_total, print_loss_total/len(self.dataset.list_data)))
-            torch.save(self.encoder.state_dict(), self.save_path +  str(iter) + str(print_loss_total) + "encoder")
-            torch.save(self.decoder.state_dict(), self.save_path +  str(iter) + str(print_loss_total) + "decoder")
 
             if (self.best_lost > print_loss_total):
+                torch.save(self.encoder.state_dict(), self.save_path + str(iter) + str(print_loss_total) + "encoder")
+                torch.save(self.decoder.state_dict(), self.save_path + str(iter) + str(print_loss_total) + "decoder")
                 self.best_lost = print_loss_total
                 torch.save(self.encoder.state_dict(), self.save_path + "_best_" + "encoder")
                 torch.save(self.decoder.state_dict(), self.save_path + "_best_" + "decoder")
 
-            if (iter % 10 == 0):
+            if (iter % 10 == 1):
                 self.dataset.shuffle_data()
                 error = 0
-                for i in range(50):
+                for i in range(100):
                     error += self.evaluate(model_ver, self.dataset._max_length_laser)
-                print('acc: %f)' % (1- float(error)/50))
+                print('acc: %f)' % (1- float(error)/100))
 
 
         self.showPlot(plot_losses)
@@ -318,7 +318,7 @@ class Model:
         # ax.yaxis.set_major_locator(loc)
         plt.plot(points)
 
-    def evaluate(self, model_ver=1, max_length=MAX_LENGTH):
+    def evaluate(self, model_ver=1, max_length=MAX_LENGTH, plot=False):
         training_pair = self.dataset.next_pair()
         input_variable = training_pair[0]
         input_length = input_variable.size()[0]
@@ -366,6 +366,16 @@ class Model:
         two_way = 0
         streight = 0
         const = 1
+        if (model_ver == 1 and plot==True):
+            plt.matshow(decoder_attentions[:di + 1].numpy())
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            if (model_ver == 1):
+                cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
+                fig.colorbar(cax)
+
+            plt.show()
+
         for words in [decoded_words, sentences]:
             const *= -1
             for w in words:
@@ -395,12 +405,4 @@ class Model:
             return 1
         return 0
 
-        # if (model_ver == 1):
-        #     plt.matshow(decoder_attentions[:di + 1].numpy())
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)
-        # if (model_ver == 1):
-        #     cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
-        #     fig.colorbar(cax)
-        #
-        # plt.show()
+
