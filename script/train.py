@@ -34,11 +34,11 @@ class EncoderRNN(nn.Module):
         self.conv = nn.Conv1d(input_size, hidden_size, 4)
         self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
 
-        self.linear = nn.Linear(hidden_size*(90-3), self.hidden_size)
+        self.linear = nn.Linear(hidden_size*(360-3), self.hidden_size)
         self.gru = nn.GRU(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
-        conv = self.conv(input.view(1, 1, 90))
+        conv = self.conv(input.view(1, 1, 360))
         # conv = self.conv2(conv)
         linear = conv.view(1, 1, -1)
         output = self.linear(linear)
@@ -136,7 +136,7 @@ class Model:
 
         self.dataset = dataset
         plt.ion()
-        hidden_size = 1500
+        hidden_size = 500
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.save_path = save_model_path
         self.best_lost = sys.float_info.max
@@ -169,10 +169,14 @@ class Model:
 
         self.dataset.shuffle_data()
         error = 0
-        for i in range(2):
-            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+        for i in range(len(self.dataset.list_data)):
+            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
 
-        print ("accu: {}", float(error)/100)
+        print ("accu: {}", float(error)/len(self.dataset.list_data))
+
+        self.dataset.shuffle_data()
+        self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+        self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
         raw_input("end")
 
     def train(self, input_variable, target_variable, criterion, model_ver=1,
@@ -244,7 +248,7 @@ class Model:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=10, learning_rate=0.001, save=True):
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001, save=True):
         start = time.time()
         plot_losses = []
 
@@ -303,9 +307,9 @@ class Model:
             if (iter % 10 == 1):
                 self.dataset.shuffle_data()
                 error = 0
-                for i in range(100):
+                for i in range(len(self.dataset.list_data)):
                     error += self.evaluate(model_ver, self.dataset._max_length_laser)
-                print('acc: %f)' % (1- float(error)/100))
+                print('acc: %f)' % (1- float(error)/len(self.dataset.list_data)))
 
 
         self.showPlot(plot_losses)
