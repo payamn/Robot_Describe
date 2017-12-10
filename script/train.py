@@ -31,10 +31,10 @@ class EncoderRNN(nn.Module):
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.input_size = input_size
-        self.conv = nn.Conv1d(input_size, hidden_size, 7)
+        self.conv = nn.Conv1d(input_size, hidden_size, 4)
         self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
 
-        self.linear = nn.Linear(hidden_size*(90-6), self.hidden_size)
+        self.linear = nn.Linear(hidden_size*(90-3), self.hidden_size)
         self.gru = nn.GRU(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
@@ -132,11 +132,11 @@ class AttnDecoderRNN(nn.Module):
 
 
 class Model:
-    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5):
+    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True):
 
         self.dataset = dataset
         plt.ion()
-        hidden_size = 1000
+        hidden_size = 1500
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.save_path = save_model_path
         self.best_lost = sys.float_info.max
@@ -165,12 +165,12 @@ class Model:
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
         print ("model version %d" %model_ver)
-        self.trainIters(50, model_ver=model_ver, print_every=10)
+        self.trainIters(1000, model_ver=model_ver, print_every=10, save=save)
 
         self.dataset.shuffle_data()
         error = 0
-        for i in range(100):
-            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
+        for i in range(2):
+            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
 
         print ("accu: {}", float(error)/100)
         raw_input("end")
@@ -240,11 +240,11 @@ class Model:
 
     def adjust_learning_rate(self, optimizer, epoch, learning_rate):
         """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
-        lr = learning_rate  * (0.92 ** (epoch // 2))
+        lr = learning_rate  * (0.96 ** (epoch // 2))
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.0001):
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=10, learning_rate=0.001, save=True):
         start = time.time()
         plot_losses = []
 
@@ -293,7 +293,7 @@ class Model:
             print('%s (%d %f%%) %.4f avg: %.4f' % (self.timeSince(start, iter / n_iters),
                                          iter, iter / float(n_iters) * 100, print_loss_total, print_loss_total/len(self.dataset.list_data)))
 
-            if (self.best_lost > print_loss_total):
+            if (self.best_lost > print_loss_total and save == True):
                 torch.save(self.encoder.state_dict(), self.save_path + str(iter) + str(print_loss_total) + "encoder")
                 torch.save(self.decoder.state_dict(), self.save_path + str(iter) + str(print_loss_total) + "decoder")
                 self.best_lost = print_loss_total
