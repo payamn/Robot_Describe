@@ -56,7 +56,7 @@ class EncoderRNN(nn.Module):
 
 class DecoderRNNMy(nn.Module):
     def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
-        super(DecoderRNN, self).__init__()
+        super(DecoderRNNMy, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.n_layers = n_layers
@@ -161,6 +161,51 @@ class AttnDecoderRNN(nn.Module):
             return result
 
 
+
+class AttnDecoderRNN_V2(nn.Module):
+    def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
+        super(AttnDecoderRNN_V2, self).__init__()
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.dropout_p = dropout_p
+        self.max_length = max_length
+
+        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
+        self.attn = nn.Linear(self.hidden_size * (2) + max_length*hidden_size, self.max_length)
+        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        self.dropout = nn.Dropout(self.dropout_p)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, input, hidden, encoder_outputs):
+        embedded = self.embedding(input).view(1, 1, -1)
+        embedded = self.dropout(embedded)
+        concat = torch.cat((embedded[0], hidden[0], encoder_outputs.view( 1, -1)), 1)
+
+        attention = self.attn(concat)
+
+        attn_weights = F.softmax(attention)
+        attn_applied = torch.bmm(attn_weights.unsqueeze(0),
+                                 encoder_outputs.unsqueeze(0))
+
+        output = torch.cat((embedded[0], attn_applied[0]), 1)
+        output = self.attn_combine(output).unsqueeze(0)
+
+        for i in range(self.n_layers):
+            output = F.relu(output)
+            output, hidden = self.gru(output, hidden)
+
+        output = F.log_softmax(self.out(output[0]))
+        return output, hidden, attn_weights
+
+    def initHidden(self):
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        if use_cuda:
+            return result.cuda()
+        else:
+            return result
+
 class Model:
     def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True):
 
@@ -180,6 +225,9 @@ class Model:
                                           dropout_p=0.1, max_length=self.dataset._max_length_laser)
         if model_ver == 3:
             self.decoder = DecoderRNN(hidden_size, self.dataset.lang.n_words,
+                                          dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        if model_ver == 4:
+            self.decoder = AttnDecoderRNN_V2(hidden_size, self.dataset.lang.n_words,
                                           dropout_p=0.1, max_length=self.dataset._max_length_laser)
 
         if use_cuda:
@@ -398,7 +446,7 @@ class Model:
         for di in range(max_length):
             decoder_output, decoder_hidden, decoder_attention = self.decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
-            if (model_ver==1):
+            if (model_ver==1 or model_ver==4):
                 decoder_attentions[di] = decoder_attention.data
             topv, topi = decoder_output.data.topk(1)
             ni = topi[0][0]
@@ -416,7 +464,7 @@ class Model:
         two_way = 0
         streight = 0
         const = 1
-        if (model_ver == 1 and plot==True):
+        if ((model_ver == 1 or model_ver==4) and plot==True):
             ax = plt.matshow(decoder_attentions[:di + 1].numpy())
             plt.colorbar(ax)
             # fig = plt.figure()
