@@ -54,7 +54,7 @@ class EncoderRNN(nn.Module):
             return result
 
 
-class DecoderRNN(nn.Module):
+class DecoderRNNMy(nn.Module):
     def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
         super(DecoderRNN, self).__init__()
         self.hidden_size = hidden_size
@@ -85,6 +85,36 @@ class DecoderRNN(nn.Module):
         output = F.log_softmax(self.out(output[0]))
         return output, hidden, None
 
+class DecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size, n_layers=2, dropout_p=0.15, max_length=MAX_LENGTH):
+        super(DecoderRNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.dropout_p = dropout_p
+        self.max_length = max_length
+        self.linear = nn.Linear(hidden_size*2, self.hidden_size)
+
+        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
+        self.dropout = nn.Dropout(self.dropout_p)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, input, hidden, encoder_outputs):
+        embedded = self.embedding(input).view(1, 1, -1)
+        embedded = self.dropout(embedded)
+        encoder_outputs = encoder_outputs.view(1, 1, -1)
+        concat = torch.cat((embedded[0], encoder_outputs[0]), 1)
+
+        output = concat.unsqueeze(0)
+        output = self.linear(output)
+
+        for i in range(self.n_layers):
+            output = F.relu(output)
+            output, hidden = self.gru(output, hidden)
+
+        output = F.log_softmax(self.out(output[0]))
+        return output, hidden, None
 
 
 class AttnDecoderRNN(nn.Module):
@@ -135,6 +165,7 @@ class Model:
     def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True):
 
         self.dataset = dataset
+
         plt.ion()
         hidden_size = 500
         self.teacher_forcing_ratio = teacher_forcing_ratio
@@ -145,6 +176,9 @@ class Model:
             self.decoder = AttnDecoderRNN(hidden_size, self.dataset.lang.n_words,
                                           dropout_p=0.1, max_length=self.dataset._max_length_laser)
         if model_ver == 2:
+            self.decoder = DecoderRNNMy(hidden_size, self.dataset.lang.n_words,
+                                          dropout_p=0.1, max_length=self.dataset._max_length_laser)
+        if model_ver == 3:
             self.decoder = DecoderRNN(hidden_size, self.dataset.lang.n_words,
                                           dropout_p=0.1, max_length=self.dataset._max_length_laser)
 
@@ -187,13 +221,19 @@ class Model:
         input_length = input_variable.size()[0]
 
         encoder_hidden = self.encoder.initHidden()
-        encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
+        if model_ver == 3:
+            encoder_outputs = Variable(torch.zeros(1, self.encoder.hidden_size))
+        else:
+            encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
 
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
                 input_variable[ei], encoder_hidden)
-            encoder_outputs[ei] = encoder_output[0][0]
+            if model_ver == 3:
+                encoder_outputs = encoder_output[0][0]
+            else:
+                encoder_outputs[ei] = encoder_output[0][0]
 
         decoder_input = Variable(torch.LongTensor([[SOS_token]]))
         decoder_input = decoder_input.cuda() if use_cuda else decoder_input
@@ -248,7 +288,7 @@ class Model:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
-    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=25, learning_rate=0.001, save=True):
+    def trainIters(self, n_iters, model_ver=1, print_every=1000, plot_every=100, batch_size=20, learning_rate=0.001, save=True):
         start = time.time()
         plot_losses = []
 
@@ -267,7 +307,7 @@ class Model:
                 print ("lr: ", param_group['lr'])
             self.dataset.shuffle_data()
             print (int(round(len(self.dataset.list_data)/batch_size)))
-            for batch in range(1,int(round(len(self.dataset.list_data)/batch_size))+1):
+            for batch in range(1,int((len(self.dataset.list_data)/batch_size))+1):
 
                 encoder_optimizer.zero_grad()
                 decoder_optimizer.zero_grad()
@@ -307,10 +347,10 @@ class Model:
             if (iter % 10 == 1):
                 self.dataset.shuffle_data()
                 error = 0
-                for i in range(len(self.dataset.list_data)):
+                for i in range(len(self.dataset.list_data)-1):
                     error += self.evaluate(model_ver, self.dataset._max_length_laser)
-                print('acc: %f)' % (1- float(error)/len(self.dataset.list_data)))
-
+                print('acc: %f)' % (1- float(error)/(len(self.dataset.list_data)-1)))
+                self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
 
         self.showPlot(plot_losses)
 
@@ -332,14 +372,20 @@ class Model:
         for word in  expected_out:
             sentences.append(self.dataset.lang.index2word[word])
 
-        encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
+        if model_ver == 3:
+            encoder_outputs = Variable(torch.zeros(1, self.encoder.hidden_size))
+        else:
+            encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
         encoder_hidden = self.encoder.initHidden()
         loss = 0
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
                 input_variable[ei], encoder_hidden)
-            encoder_outputs[ei] = encoder_output[0][0]
+            if model_ver == 3:
+                encoder_outputs = encoder_output[0][0]
+            else:
+                encoder_outputs[ei] = encoder_output[0][0]
 
         decoder_input = Variable(torch.LongTensor([[SOS_token]]))
         decoder_input = decoder_input.cuda() if use_cuda else decoder_input
@@ -371,12 +417,13 @@ class Model:
         streight = 0
         const = 1
         if (model_ver == 1 and plot==True):
-            plt.matshow(decoder_attentions[:di + 1].numpy())
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            if (model_ver == 1):
-                cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
-                fig.colorbar(cax)
+            ax = plt.matshow(decoder_attentions[:di + 1].numpy())
+            plt.colorbar(ax)
+            # fig = plt.figure()
+
+            # ax = fig.add_subplot(111)
+            # cax = ax.matshow(decoder_attentions[:di + 1].numpy(), cmap='bone')
+            # fig.colorbar(cax)
 
             plt.show()
 
@@ -402,10 +449,11 @@ class Model:
                     corner += const
 
         output_sentence = ' '.join(decoded_words)
-        if corner != 0 or left != 0 or forward != 0 or two_way != 0 or streight != 0 or const != 1:
-            print ("output: ", output_sentence)
-            print ("target: ", " ".join(sentences))
-            print ()
+        if (corner != 0 or left != 0 or forward != 0 or two_way != 0 or streight != 0 or const != 1):
+            if plot == True:
+                print ("output: ", output_sentence)
+                print ("target: ", " ".join(sentences))
+                print ()
             return 1
         return 0
 
