@@ -1,4 +1,5 @@
 # General Parameters
+robot_base_frame: robot_0/base_link
 use_scan_matching: true
 use_scan_barycenter: true
 minimum_travel_distance: 0.2 

@@ -1,0 +1,35 @@
+<launch>
+   <arg name="robot_frame" default="robot_0/base_link" />
+   <node pkg="mbf_costmap_nav" type="mbf_costmap_nav" respawn="false" name="move_base_flex" output="screen">
+      <param name="tf_timeout" value="1.5"/>
+      <param name="planner_max_retries" value="3"/>
+
+
+
+      <param name="global_costmap/observation_sources" value="robot_0/base_scan_1" />
+      <param name="local_costmap/observation_sources" value="robot_0/base_scan_1" />
+
+      <param name="local_costmap/robot_base_frame" value="$(arg robot_frame)" />
+      <param name="global_costmap/robot_base_frame" value="$(arg robot_frame)" />
+
+      <!-- Local param -->
+      <!-- <param name="TebLocalPlannerROS/odom_topic" value="/robot_0/odom" /> -->
+      <param name="odom" value="/robot_0/odom" />
+
+
+      <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
+      <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
+      <rosparam file="$(find blob_follower)/config_nav/local_costmap_params.yaml" command="load" />
+      <rosparam file="$(find blob_follower)/config_nav/global_costmap_params.yaml" command="load" />
+      <rosparam file="$(find blob_follower)/config_nav/recovery_behaviors.yaml" command="load" />
+      <rosparam file="$(find blob_follower)/config_nav/controllers.yaml" command="load" />
+      <rosparam file="$(find blob_follower)/config_nav/planners.yaml" command="load" />
+      <rosparam file="$(find blob_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
+
+      <!--<rosparam file="$(find blob_follower)/config_nav/base_local_planner_params.yaml" command="load" />-->
+      <!--<param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS" />-->
+
+      <param name="robot_frame" value="$(arg robot_frame)" />
+      <!--<rosparam file="$(find )/planners.yaml" command="load" />-->
+  </node>
+</launch>

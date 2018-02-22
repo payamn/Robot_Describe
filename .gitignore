@@ -1,2 +1,5 @@
 bag/*
+.idea/*
+bag*
+check_points*
 *.pyc

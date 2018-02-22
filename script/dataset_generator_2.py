@@ -21,7 +21,7 @@ def callback_robot_0(odom_data, my_robot):
 
 if __name__ == '__main__':
     rospy.init_node('listener', anonymous=True)
-    robot = Robot(True, 2)
+    robot = Robot(True, 2, start_index_dataset=0)
     rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, callback_robot_0, robot)
     rospy.Subscriber("/robot_0/base_scan_1", LaserScan, callback_laser_scan, robot)
     rospy.spin()

@@ -1,7 +1,7 @@
 import math
 mapper_constant_val_x = 10
 mapper_constant_val_y = 10
-intersection_r = 0.5
+intersection_r = 2.5
 degree_delta = 25
 
 class Utility:

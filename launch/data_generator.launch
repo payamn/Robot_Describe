@@ -23,7 +23,7 @@
 	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
 
 	<node name="map_server" pkg="map_server" type="map_server"
-	args="$(find blob_follower)/worlds/eight.yaml" output="screen"/>
+	args="$(find blob_follower)/worlds/eight_big.yaml" output="screen"/>
 	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="10 10 0 0 0 0 -1 map $(arg odom_frame) 100" />
 	<include file="$(find blob_follower)/launch/amcl.launch">
 		<remap from="scan" to="robot_0/base_scan_1"/>
@@ -48,9 +48,14 @@
 	    <rosparam command="load" file="$(find blob_follower)/config_nav/mapper_params.yaml" />
 	</node>
  -->
-	<include file="$(find blob_follower)/config_nav/move_base.xml" />
+	<!--<include file="$(find blob_follower)/config_nav/move_base.xml" />-->
+	<include file="$(find blob_follower)/config_nav/move_base_flex.xml" />
 
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" >
+		<!--<remap from="/move_base_simple/goal" to="/move_base_flex/current_goal"/>-->
+	</node>
+	  <node pkg="blob_follower" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
+
 		  <!--args="-d $(find blob_follower)/config/simulation.rviz"/>-->
 
 	<!--<node pkg="joy" type="joy_node" name="joy_node" output="screen">-->

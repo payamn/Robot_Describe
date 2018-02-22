@@ -4,6 +4,7 @@ from sensor_msgs.msg import LaserScan
 import threading
 import torch
 import rospy
+import os
 from torch.autograd import Variable
 
 EOS_token = 1
@@ -38,12 +39,12 @@ class Lang:
 
 
 class DataSet:
-    def __init__(self, directions, data_generation, is_data_generation):
+    def __init__(self, directions, data_generation, is_data_generation, bag_number = 0):
         self._list_iterator = 0
         self.lock = threading.Lock()
         self.list_data = []
         self._directions = open(directions, 'r')
-        self._bag_num = 0
+        self._bag_num = bag_number
         self._bag_name = data_generation
         self._corner = []
         self._left = []
@@ -63,9 +64,9 @@ class DataSet:
         else:
             self._max_length_laser = 0
             self.lang = Lang()
-            self._bag_num = 0 # means no bag read yet
+            self._bag_num = bag_number # means no bag read yet
             rospy.loginfo("number of bag read: " + self._bag_name + str(self._bag_num+1))
-            self._bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
+            # self._bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
             self.read_bag()
 
     def read_list_direction(self):
@@ -101,43 +102,63 @@ class DataSet:
         self._one_way = self.read_list_direction()
         self._intersection = self.read_list_direction()
 
+    # return True if laser was correct
+    # return False if laser was not set correctly
+
     def write_bag(self, topic, msg_data):
         self.lock.acquire()
-        if type(msg_data) != LaserScan:
-            rospy.logwarn(msg_data.data)
+        # if type(msg_data) != LaserScan:
+        #     rospy.logwarn("all laser are not set")
+        #     self.lock.release()
+        #     return False
+
         self._bag.write(topic, msg_data)
         self.lock.release()
+        return True
 
     def read_bag(self):
         rospy.logwarn("inside read bag: ")
         counter = 0
-        while True:
-            try:
-                data = Data()
-                bag = rosbag.Bag(self._bag_name + str(self._bag_num+1), 'r')
-
-                rospy.logwarn("inside read bag: " + str(self._bag_num+1))
-                print (self._bag_name + str(self._bag_num+1))
-
-                for topic, msg, t in bag.read_messages(topics=['language', '/robot_0/base_scan_1']):
-                    if topic == 'language':
-                        rospy.loginfo(msg)
-                        data.words += msg.data
-                    else:
-                        counter += 1
-                        # ranges = tuple(int(100000 * x) for x in msg.ranges)
-                        data.laser.append([float(x)/msg.range_max for x in msg.ranges])
-                self._bag_num += 1
-                bag.close()
-                if len(data.laser) > self._max_length_laser:
-                    self._max_length_laser = len(data.laser)
-                data.words = data.words.replace('\n', ' ')
-                data.words = [a for a in data.words.split(' ') if a != '']
-                self.lang.add_words(data.words)
-                self.list_data.append(data)
-            except IOError:
-                rospy.loginfo("number of bag read: " + str(self._bag_num) + "laser: " +str(counter))
-                break
+        files = [f for f in os.listdir(self._bag_name) if os.path.isfile(os.path.join(self._bag_name, f))]
+        for file in files:
+            data = Data()
+            bag = rosbag.Bag(os.path.join(self._bag_name ,file) , 'r')
+            rospy.logwarn("inside read bag: " + str(self._bag_num))
+            rospy.logwarn( os.path.join(self._bag_name ,file))
+            is_fail = False
+            for topic, msg, t in bag.read_messages(topics=['language', '/robot_0/base_scan_1']):
+                if topic == 'language':
+                    rospy.logwarn(msg)
+                    data.words += msg.data
+                else:
+                    data.laser.append([float(x) / msg.range_max for x in msg.ranges])
+                    if len(data.laser[0])==0:
+                        rospy.logerr("file without laser data:%s skipping", file)
+                        is_fail = True
+                        break
+                    counter += 1
+                    # ranges = tuple(int(100000 * x) for x in msg.ranges)
+            if is_fail:
+                continue
+            self._bag_num += 1
+            bag.close()
+            if len(data.laser) > self._max_length_laser:
+                self._max_length_laser = len(data.laser)
+            data.words = data.words.replace('\n', ' ')
+            data.words = [a for a in data.words.split(' ') if a != '']
+            self.lang.add_words(data.words)
+            self.list_data.append(data)
+        rospy.logwarn("number of bag read: " + str(self._bag_num) + "laser: " + str(counter))
+    # while True:
+    #         try:
+    #
+    #
+    #
+    #
+    #
+    #         except IOError:
+    #             rospy.loginfo("number of bag read: " + str(self._bag_num) + "laser: " +str(counter))
+    #             break
 
 
     def new_sequence(self):

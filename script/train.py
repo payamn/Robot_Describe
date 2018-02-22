@@ -207,7 +207,7 @@ class AttnDecoderRNN_V2(nn.Module):
             return result
 
 class Model:
-    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True):
+    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True, number_of_iter=0):
 
         self.dataset = dataset
 
@@ -244,20 +244,24 @@ class Model:
         if os.path.isfile(resume_path + "encoder"):
             self.encoder.load_state_dict(torch.load(resume_path + "encoder"))
             self.decoder.load_state_dict(torch.load(resume_path + "decoder"))
+            print("checkpoint found at '{}'".format(resume_path))
+
         else:
             print("=> no checkpoint found at '{}'".format(resume_path))
         print ("model version %d" %model_ver)
-        self.trainIters(1000, model_ver=model_ver, print_every=10, save=save)
+        self.trainIters(number_of_iter, model_ver=model_ver, print_every=10, save=save)
 
         self.dataset.shuffle_data()
         error = 0
         for i in range(len(self.dataset.list_data)):
-            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
+            print ("in eval"+ str(i))
+            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
 
         print ("accu: {}", float(error)/len(self.dataset.list_data))
 
         self.dataset.shuffle_data()
-        self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+        for i in range(10):
+            self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
         self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
         raw_input("end")
 
