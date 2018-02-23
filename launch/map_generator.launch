@@ -19,14 +19,14 @@
 	    <param name="ymin" value="-10"/>
 	    <param name="xmax" value="10"/>
 	    <param name="ymax" value="10"/>
-	    <rosparam command="load" file="$(find blob_follower)/config_nav/mapper_params.yaml" />
+	    <rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />
 	</node>
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" >
 		<!--<remap from="/move_base_simple/goal" to="/move_base_flex/current_goal"/>-->
 	</node>
 
-	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find blob_follower)/worlds/simple.world">
+	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/simple.world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>

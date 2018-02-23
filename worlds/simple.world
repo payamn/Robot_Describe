@@ -31,7 +31,8 @@ floorplan
   name "cave"
   size [12.000 12.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "bitmaps/eight_big.pgm"
+#  bitmap "bitmaps/eight_big.pgm"
+  bitmap "bitmaps/eight.pgm"
 )
 define c intersection
 (

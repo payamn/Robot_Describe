@@ -17,16 +17,16 @@
       <param name="odom" value="/robot_0/odom" />
 
 
-      <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
-      <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
-      <rosparam file="$(find blob_follower)/config_nav/local_costmap_params.yaml" command="load" />
-      <rosparam file="$(find blob_follower)/config_nav/global_costmap_params.yaml" command="load" />
-      <rosparam file="$(find blob_follower)/config_nav/recovery_behaviors.yaml" command="load" />
-      <rosparam file="$(find blob_follower)/config_nav/controllers.yaml" command="load" />
-      <rosparam file="$(find blob_follower)/config_nav/planners.yaml" command="load" />
-      <rosparam file="$(find blob_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
+      <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
+      <rosparam file="$(find robot_describe)/config_nav/local_costmap_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/global_costmap_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/recovery_behaviors.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/controllers.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/planners.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/teb_local_planner_params.yaml" command="load" />
 
-      <!--<rosparam file="$(find blob_follower)/config_nav/base_local_planner_params.yaml" command="load" />-->
+      <!--<rosparam file="$(find robot_describe)/config_nav/base_local_planner_params.yaml" command="load" />-->
       <!--<param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS" />-->
 
       <param name="robot_frame" value="$(arg robot_frame)" />

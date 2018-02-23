@@ -207,9 +207,9 @@ class AttnDecoderRNN_V2(nn.Module):
             return result
 
 class Model:
-    def __init__(self, dataset, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True, number_of_iter=0):
+    def __init__(self, robot, save_model_path, model_ver=1, resume_path = None, teacher_forcing_ratio = 0.5, save=True, number_of_iter=0, real_time_test=False):
 
-        self.dataset = dataset
+        self.dataset = robot.dataset
 
         plt.ion()
         hidden_size = 500
@@ -255,14 +255,14 @@ class Model:
         error = 0
         for i in range(len(self.dataset.list_data)):
             print ("in eval"+ str(i))
-            error += self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+            error += self.evaluate_check(model_ver, self.dataset._max_length_laser, plot=True)
 
         print ("accu: {}", float(error)/len(self.dataset.list_data))
 
         self.dataset.shuffle_data()
         for i in range(10):
-            self.evaluate(model_ver, self.dataset._max_length_laser, plot=False)
-        self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+            self.evaluate_check(model_ver, self.dataset._max_length_laser, plot=False)
+        self.evaluate_check(model_ver, self.dataset._max_length_laser, plot=True)
         raw_input("end")
 
     def train(self, input_variable, target_variable, criterion, model_ver=1,
@@ -400,9 +400,9 @@ class Model:
                 self.dataset.shuffle_data()
                 error = 0
                 for i in range(len(self.dataset.list_data)-1):
-                    error += self.evaluate(model_ver, self.dataset._max_length_laser)
+                    error += self.evaluate_check(model_ver, self.dataset._max_length_laser)
                 print('acc: %f)' % (1- float(error)/(len(self.dataset.list_data)-1)))
-                self.evaluate(model_ver, self.dataset._max_length_laser, plot=True)
+                self.evaluate_check(model_ver, self.dataset._max_length_laser, plot=True)
 
         self.showPlot(plot_losses)
 
@@ -414,15 +414,9 @@ class Model:
         # ax.yaxis.set_major_locator(loc)
         plt.plot(points)
 
-    def evaluate(self, model_ver=1, max_length=MAX_LENGTH, plot=False):
-        training_pair = self.dataset.next_pair()
+    def evaluate(self, training_pair, model_ver=1, max_length=MAX_LENGTH, plot=False):
         input_variable = training_pair[0]
         input_length = input_variable.size()[0]
-
-        sentences = []
-        expected_out = training_pair[1].data.cpu().numpy().reshape(-1)
-        for word in  expected_out:
-            sentences.append(self.dataset.lang.index2word[word])
 
         if model_ver == 3:
             encoder_outputs = Variable(torch.zeros(1, self.encoder.hidden_size))
@@ -450,7 +444,7 @@ class Model:
         for di in range(max_length):
             decoder_output, decoder_hidden, decoder_attention = self.decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
-            if (model_ver==1 or model_ver==4):
+            if (model_ver == 1 or model_ver == 4):
                 decoder_attentions[di] = decoder_attention.data
             topv, topi = decoder_output.data.topk(1)
             ni = topi[0][0]
@@ -462,12 +456,6 @@ class Model:
 
             decoder_input = Variable(torch.LongTensor([[ni]]))
             decoder_input = decoder_input.cuda() if use_cuda else decoder_input
-        corner = 0
-        left = 0
-        forward = 0
-        two_way = 0
-        streight = 0
-        const = 1
         if ((model_ver == 1 or model_ver==4) and plot==True):
             ax = plt.matshow(decoder_attentions[:di + 1].numpy())
             plt.colorbar(ax)
@@ -478,6 +466,23 @@ class Model:
             # fig.colorbar(cax)
 
             plt.show()
+        return decoded_words
+
+    def evaluate_check(self, model_ver=1, max_length=MAX_LENGTH, plot=False):
+        training_pair = self.dataset.next_pair()
+        sentences = []
+        expected_out = training_pair[1].data.cpu().numpy().reshape(-1)
+        for word in expected_out:
+            sentences.append(self.dataset.lang.index2word[word])
+
+        decoded_words = self.evaluate(training_pair, model_ver, max_length, plot)
+
+        corner = 0
+        left = 0
+        forward = 0
+        two_way = 0
+        streight = 0
+        const = 1
 
         for words in [decoded_words, sentences]:
             const *= -1

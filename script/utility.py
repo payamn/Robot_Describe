@@ -3,7 +3,7 @@ mapper_constant_val_x = 10
 mapper_constant_val_y = 10
 intersection_r = 2.5
 degree_delta = 25
-
+LASER_SCAN_WINDOW = 40
 class Utility:
 
     @staticmethod

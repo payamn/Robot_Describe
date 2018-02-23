@@ -7,10 +7,10 @@
     <param name="recovery_behavior_enabled" value="true" />
     <!-- <remap from="/cmd_vel" to="/move_base/cmd_vel" /> -->
 
-    <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
-    <rosparam file="$(find blob_follower)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
-    <rosparam file="$(find blob_follower)/config_nav/local_costmap_params.yaml" command="load" />
-    <rosparam file="$(find blob_follower)/config_nav/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find robot_describe)/config_nav/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find robot_describe)/config_nav/global_costmap_params.yaml" command="load" />
 
     <!-- Costmap common param (for both local and global) -->
     <param name="global_costmap/observation_sources" value="robot_0/base_scan_1" />
@@ -24,13 +24,13 @@
     <param name="odom" value="/robot_0/odom" />
 
     <!-- For default base planner -->
-    <rosparam file="$(find blob_follower)/config_nav/base_local_planner_params.yaml" command="load" />
+    <rosparam file="$(find robot_describe)/config_nav/base_local_planner_params.yaml" command="load" />
     <param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS" />
     <!-- For teb base planner --> 
-  <!--  <rosparam file="$(find blob_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
+  <!--  <rosparam file="$(find robot_describe)/config_nav/teb_local_planner_params.yaml" command="load" />
     <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
     --> 
-    <!-- <rosparam file="$(find blob_follower)/config_nav/dwa_local_planner_params.yaml" command="load" />
+    <!-- <rosparam file="$(find robot_describe)/config_nav/dwa_local_planner_params.yaml" command="load" />
     <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" /> -->
 
     <!-- Global planner -->

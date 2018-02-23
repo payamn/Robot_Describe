@@ -122,7 +122,12 @@ class DataSet:
         files = [f for f in os.listdir(self._bag_name) if os.path.isfile(os.path.join(self._bag_name, f))]
         for file in files:
             data = Data()
-            bag = rosbag.Bag(os.path.join(self._bag_name ,file) , 'r')
+            try:
+                bag = rosbag.Bag(os.path.join(self._bag_name ,file) , 'r')
+            except rosbag.bag.ROSBagUnindexedException:
+                rospy.logerr("bag %s problem skipping:",file)
+                continue
+
             rospy.logwarn("inside read bag: " + str(self._bag_num))
             rospy.logwarn( os.path.join(self._bag_name ,file))
             is_fail = False

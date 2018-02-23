@@ -10,7 +10,7 @@
 	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
-	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find blob_follower)/worlds/simple.world">
+	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/simple.world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>
@@ -18,14 +18,14 @@
 
 	<!-- nodelets and its manager for cmd_vel mux -->
 
-	<!-- <include file="$(find blob_follower)/launch/ekf.launch" /> -->
+	<!-- <include file="$(find robot_describe)/launch/ekf.launch" /> -->
 
 	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
 
 	<node name="map_server" pkg="map_server" type="map_server"
-	args="$(find blob_follower)/worlds/eight_big.yaml" output="screen"/>
+	args="$(find robot_describe)/worlds/eight.yaml" output="screen"/>
 	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="10 10 0 0 0 0 -1 map $(arg odom_frame) 100" />
-	<include file="$(find blob_follower)/launch/amcl.launch">
+	<include file="$(find robot_describe)/launch/amcl.launch">
 		<remap from="scan" to="robot_0/base_scan_1"/>
 		<param name="odom_frame_id" value="$(arg odom_frame)"/>
 		<param name="base_frame_id" value="$(arg base_frame)"/>
@@ -45,18 +45,18 @@
 	    <param name="ymin" value="-10"/>
 	    <param name="xmax" value="10"/>
 	    <param name="ymax" value="10"/>
-	    <rosparam command="load" file="$(find blob_follower)/config_nav/mapper_params.yaml" />
+	    <rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />
 	</node>
  -->
-	<!--<include file="$(find blob_follower)/config_nav/move_base.xml" />-->
-	<include file="$(find blob_follower)/config_nav/move_base_flex.xml" />
+	<!--<include file="$(find robot_describe)/config_nav/move_base.xml" />-->
+	<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />
 
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" >
 		<!--<remap from="/move_base_simple/goal" to="/move_base_flex/current_goal"/>-->
 	</node>
-	  <node pkg="blob_follower" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
+	  <node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
 
-		  <!--args="-d $(find blob_follower)/config/simulation.rviz"/>-->
+		  <!--args="-d $(find robot_describe)/config/simulation.rviz"/>-->
 
 	<!--<node pkg="joy" type="joy_node" name="joy_node" output="screen">-->
 		<!--<remap from="/joy" to="/teleop/joy" />-->

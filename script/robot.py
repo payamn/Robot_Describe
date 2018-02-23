@@ -21,17 +21,21 @@ class IntersectionNode:
 
 
 class Robot:
-    def __init__(self, is_data_generation, data_set_ver, start_index_dataset = 0):
+    def __init__(self, is_data_generation, data_set_ver, start_index_dataset = 0, real_time_test=False):
         random.seed()
 
         rospack = rospkg.RosPack()
         self.data_set_ver = data_set_ver
         self.remaining_intersection = 1
-        self.path = rospack.get_path('blob_follower')
+        self.path = rospack.get_path('robot_describe')
         self.language_topic = "language"
         self.lock = threading.Lock()
         self.not_change = 0
-        if data_set_ver == 1:
+        self.real_time = real_time_test
+        # Not yet implemented for dataset version 1
+        if real_time_test == True and data_set_ver == 2:
+            print "real time test"
+        elif data_set_ver == 1:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation,bag_number = start_index_dataset)
         else:
             self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag_2/", is_data_generation, bag_number = start_index_dataset)
@@ -56,8 +60,8 @@ class Robot:
         self.lock = threading.Lock()
         if is_data_generation:
             self.client = actionlib.SimpleActionClient("move_base_flex/move_base", MoveBaseAction)
-            self.remaining_laser_scan = 40  # start with 40 which means wait for 40 laser scan as the array empty
-            self.laser_scans = [LaserScan() for x in range(40)]  # allocate 40 space for 40 laser scan
+            self.remaining_laser_scan = LASER_SCAN_WINDOW  # start with LASER_SCAN_WINDOW which means wait for LASER_SCAN_WINDOW laser scan as the array empty
+            self.laser_scans = [LaserScan() for x in range(LASER_SCAN_WINDOW)]  # allocate LASER_SCAN_WINDOW space for LASER_SCAN_WINDOW laser scan
             self.laser_pointer = 0  # index to add new laser scan
             self.send_pos(self.list_intersection[0].pose)
 
@@ -90,26 +94,52 @@ class Robot:
         #
         # # start moving
         # self.client.send_goal(goal)
+    def bag_scan_laser_online(self, scan):
+        self.lock.acquire()
+        # success = self.client.get_goal_status_text()
+        # print('success status', success)
+        self.laser_scans[self.laser_pointer] = scan
+        self.laser_pointer = (self.laser_pointer + 1) % LASER_SCAN_WINDOW
 
+        # self.remaining_laser_scan -= 1
+        # if (self.remaining_laser_scan <= 0):        # getting to limit so save the bag files
+        #     if (self.lang_bag_str.data == "continue straight" and random.uniform(0, 1.0) > 0.9):
+        #         self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
+        #         self.lock.release()
+        #         return
+        #     rospy.logerr(self.lang_bag_str.data)
+        #     self.data_set.write_bag(self.language_topic, self.lang_bag_str)
+        #     self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
+        #     for i in range (LASER_SCAN_WINDOW):
+        #         if (not self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
+        #             self.not_change = 0
+        #             self.lock.release()
+        #             return
+        #
+        #     threading.Timer(0.0, self.data_set.new_sequence).start()
+        #     if self.not_change > 0:
+        #         self.remaining_laser_scan = 2
+        #         self.not_change -= 1
+        self.lock.release()
 
     def save_bag_scan_laser(self, scan):
         self.lock.acquire()
         # success = self.client.get_goal_status_text()
         # print('success status', success)
         self.laser_scans[self.laser_pointer] = scan
-        self.laser_pointer = (self.laser_pointer + 1) % 40
+        self.laser_pointer = (self.laser_pointer + 1) % LASER_SCAN_WINDOW
 
         self.remaining_laser_scan -= 1
         if (self.remaining_laser_scan <= 0):        # getting to limit so save the bag files
             if (self.lang_bag_str.data == "continue straight" and random.uniform(0, 1.0) > 0.9):
-                self.remaining_laser_scan = 20
+                self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
                 self.lock.release()
                 return
             rospy.logerr(self.lang_bag_str.data)
             self.data_set.write_bag(self.language_topic, self.lang_bag_str)
-            self.remaining_laser_scan = 20
-            for i in range (40):
-                if (not self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % 40])):
+            self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
+            for i in range (LASER_SCAN_WINDOW):
+                if (not self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
                     self.not_change = 0
                     self.lock.release()
                     return
