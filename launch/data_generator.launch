@@ -49,12 +49,14 @@
 	</node>
  -->
 	<!--<include file="$(find robot_describe)/config_nav/move_base.xml" />-->
-	<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />
 
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" >
-		<!--<remap from="/move_base_simple/goal" to="/move_base_flex/current_goal"/>-->
-	</node>
-	  <node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
+
+	<!--Commented for test-->
+
+	<!--<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />-->
+	<!--<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>-->
+
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
 
 		  <!--args="-d $(find robot_describe)/config/simulation.rviz"/>-->
 
