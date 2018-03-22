@@ -9,7 +9,7 @@ controller:
   costmap_obstacles_behind_robot_dist: 0.4
   dt_hysteresis: 0.17928
   dt_ref: 0.3
-  dynamic_obstacle_inflation_dist: 15.0
+  dynamic_obstacle_inflation_dist: 5.0
   enable_multithreading: true
   exact_arc_length: false
   feasibility_check_no_poses: 8

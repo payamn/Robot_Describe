@@ -1,7 +1,8 @@
 import rospy
 from robot import Robot
-from train import *
+from model import *
 import rospkg
+import os
 
 import subprocess
 try:
@@ -10,7 +11,7 @@ except:
     roscore = subprocess.Popen('roscore')
 if __name__ == '__main__':
     rospy.init_node('listener', anonymous=True)
-    robot = Robot(False, 2)
-    my_model = Model(robot, rospkg.RosPack().get_path('blob_follower') + "/check_points_2/",
-                     resume_path=rospkg.RosPack().get_path('blob_follower') + "/check_points_2/" +"_best_" ,
-                     teacher_forcing_ratio=0.5, model_ver=2, save=False, number_of_iter=0)
+    robot = Robot(False, 2, use_direction_file=False, bag_name="/bag_train/")
+    my_model = Model(robot,
+                     resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'), "check_points/model_best.pth.tar") ,
+                     save=True, number_of_iter=1000, batch_size=100)

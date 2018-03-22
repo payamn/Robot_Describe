@@ -10,7 +10,7 @@
 	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
-	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/simple.world">
+	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/real_1.world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>
@@ -18,13 +18,27 @@
 
 	<!-- nodelets and its manager for cmd_vel mux -->
 
-	<!-- <include file="$(find robot_describe)/launch/ekf.launch" /> -->
+	 <!--<include file="$(find robot_describe)/launch/ekf.launch" />-->
 
-	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
+	 <!--<node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"/>-->
+
+	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
+		<remap from="joy" to="teleop/joy" />
+		<!--<remap from="cmd_vel" to="robot_0/cmd_vel" />-->
+		<param name="scale_linear" value="0.75" />
+		<param name="scale_angular" value="0.5" />
+	</node>
+
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<remap from="/joy" to="/teleop/joy" />
+		<param name="dev" type="string" value="/dev/input/js0" />
+		<!-- <param name="dev" type="string" value="/dev/input/js1" /> -->
+		<param name="autorepeat_rate" value="10" />
+	</node>
 
 	<node name="map_server" pkg="map_server" type="map_server"
-	args="$(find robot_describe)/worlds/eight.yaml" output="screen"/>
-	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="10 10 0 0 0 0 -1 map $(arg odom_frame) 100" />
+	args="$(find robot_describe)/worlds/corridor.yaml" output="screen"/>
+	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="33.8 22 0 0 0 0 -1 map $(arg odom_frame) 100" />
 	<include file="$(find robot_describe)/launch/amcl.launch">
 		<remap from="scan" to="robot_0/base_scan_1"/>
 		<param name="odom_frame_id" value="$(arg odom_frame)"/>
@@ -53,24 +67,12 @@
 
 	<!--Commented for test-->
 
-	<!--<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />-->
-	<!--<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>-->
+	<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />
+	<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
 
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
 
 		  <!--args="-d $(find robot_describe)/config/simulation.rviz"/>-->
 
-	<!--<node pkg="joy" type="joy_node" name="joy_node" output="screen">-->
-		<!--<remap from="/joy" to="/teleop/joy" />-->
-		<!--<param name="dev" type="string" value="/dev/input/js0" />-->
-		<!--&lt;!&ndash; <param name="dev" type="string" value="/dev/input/js1" /> &ndash;&gt;-->
-		<!--<param name="autorepeat_rate" value="10" />-->
-	<!--</node>-->
 
-	<!--<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">-->
-		<!--<remap from="joy" to="teleop/joy" />-->
-		<!--<remap from="cmd_vel" to="robot_1/cmd_vel" />-->
-		<!--<param name="scale_linear" value="0.75" />-->
-		<!--<param name="scale_angular" value="0.5" />-->
-	<!--</node>-->
 </launch>

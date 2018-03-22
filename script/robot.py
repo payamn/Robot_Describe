@@ -2,7 +2,7 @@ import rospy
 from nav_msgs.msg import Odometry
 # from move_base_msgs.msg import MoveBaseActionGoal
 from mbf_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
@@ -21,51 +21,58 @@ class IntersectionNode:
 
 
 class Robot:
-    def __init__(self, is_data_generation, data_set_ver, start_index_dataset = 0, real_time_test=False):
+    def __init__(self, is_data_generation, data_set_ver, start_index_dataset = 0, batch_size = 20, real_time_test=False, use_direction_file=True, bag_name="/bag_2_test/"):
         random.seed()
-
+        self.speed = (0, 0, 0)
         rospack = rospkg.RosPack()
         self.data_set_ver = data_set_ver
         self.remaining_intersection = 1
         self.path = rospack.get_path('robot_describe')
         self.language_topic = "language"
         self.lock = threading.Lock()
+        self.is_stoped = False
         self.not_change = 0
         self.real_time = real_time_test
         # Not yet implemented for dataset version 1
         if real_time_test == True and data_set_ver == 2:
             print "real time test"
         elif data_set_ver == 1:
-            self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag/bag_", is_data_generation,bag_number = start_index_dataset)
+            self.dataset = DataSet(self.path + "/data/directions.txt", self.path + bag_name, is_data_generation, batch_size = batch_size, bag_number = start_index_dataset, use_direction_file=use_direction_file)
         else:
-            self.data_set = DataSet(self.path + "/data/directions.txt", self.path + "/bag_2/", is_data_generation, bag_number = start_index_dataset)
+            self.dataset = DataSet(self.path + "/data/directions.txt", self.path + bag_name, is_data_generation, batch_size = batch_size, bag_number = start_index_dataset, use_direction_file=use_direction_file)
+
         self.lang_bag_str = String()
-        self.list_intersection = []
-        self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y - 4]),
-                                                       array([1, 5])))
-        self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y + 0]),
-                                                       array([0, 2, 4])))
-        self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y + 4]),
-                                                       array([1, 3])))
-        self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y + 4]),
-                                                       array([2, 4])))
-        self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y + 0]),
-                                                       array([1, 3, 5])))
-        self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y - 4]),
-                                                       array([0, 4])))
-        self.prev_pose = 1  # intersection 1
-        self.next_pose = 0  # intersection 0
-        self.pose = self.list_intersection[0].pose
+        if (use_direction_file):
+            self.list_intersection = []
+            self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y - 4]),
+                                                           array([1, 5])))
+            self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y + 0]),
+                                                           array([0, 2, 4])))
+            self.list_intersection.append(IntersectionNode(array([-4+mapper_constant_val_x, mapper_constant_val_y + 4]),
+                                                           array([1, 3])))
+            self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y + 4]),
+                                                           array([2, 4])))
+            self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y + 0]),
+                                                           array([1, 3, 5])))
+            self.list_intersection.append(IntersectionNode(array([4+mapper_constant_val_x, mapper_constant_val_y - 4]),
+                                                           array([0, 4])))
+            self.prev_pose = 1  # intersection 1
+            self.next_pose = 0  # intersection 0
+            self.pose = self.list_intersection[0].pose
         self.publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
         self.lock = threading.Lock()
         if is_data_generation:
             self.client = actionlib.SimpleActionClient("move_base_flex/move_base", MoveBaseAction)
             self.remaining_laser_scan = LASER_SCAN_WINDOW  # start with LASER_SCAN_WINDOW which means wait for LASER_SCAN_WINDOW laser scan as the array empty
             self.laser_scans = [LaserScan() for x in range(LASER_SCAN_WINDOW)]  # allocate LASER_SCAN_WINDOW space for LASER_SCAN_WINDOW laser scan
+            self.speeds = [Twist() for x in range(LASER_SCAN_WINDOW)]  # allocate LASER_SCAN_WINDOW space for LASER_SCAN_WINDOW laser scan
             self.laser_pointer = 0  # index to add new laser scan
-            self.send_pos(self.list_intersection[0].pose)
-
-
+            if (use_direction_file):
+                self.send_pos(self.list_intersection[0].pose)
+    def set_speed(self, twist_speed):
+        self.speed = twist_speed
+    def set_stop(self, is_stop):
+        self.is_stoped = is_stop
     def send_pos(self, pose):
 
         target_goal_simple = PoseStamped()
@@ -103,7 +110,7 @@ class Robot:
 
         # self.remaining_laser_scan -= 1
         # if (self.remaining_laser_scan <= 0):        # getting to limit so save the bag files
-        #     if (self.lang_bag_str.data == "continue straight" and random.uniform(0, 1.0) > 0.9):
+        #     if (self.lang_bag_str.data == "nothing" and random.uniform(0, 1.0) > 0.9):
         #         self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
         #         self.lock.release()
         #         return
@@ -126,50 +133,73 @@ class Robot:
         self.lock.acquire()
         # success = self.client.get_goal_status_text()
         # print('success status', success)
+        if self.is_stoped:
+            self.lock.release()
+            return
         self.laser_scans[self.laser_pointer] = scan
+        self.speeds[self.laser_pointer] = self.speed
         self.laser_pointer = (self.laser_pointer + 1) % LASER_SCAN_WINDOW
 
         self.remaining_laser_scan -= 1
         if (self.remaining_laser_scan <= 0):        # getting to limit so save the bag files
-            if (self.lang_bag_str.data == "continue straight" and random.uniform(0, 1.0) > 0.9):
+            if (self.lang_bag_str.data == "nothing" and random.uniform(0, 1.0) > 0.9):
                 self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
                 self.lock.release()
                 return
+
             rospy.logerr(self.lang_bag_str.data)
-            self.data_set.write_bag(self.language_topic, self.lang_bag_str)
+            self.dataset.write_bag(self.language_topic, self.lang_bag_str)
             self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
             for i in range (LASER_SCAN_WINDOW):
-                if (not self.data_set.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
+                if (not self.dataset.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
                     self.not_change = 0
                     self.lock.release()
                     return
 
-            threading.Timer(0.0, self.data_set.new_sequence).start()
+                self.dataset.write_bag("/robot_0/speed",
+                                       self.speeds[(i + self.laser_pointer) % LASER_SCAN_WINDOW])
+
+            threading.Timer(0.0, self.dataset.new_sequence).start()
             if self.not_change > 0:
                 self.remaining_laser_scan = 2
                 self.not_change -= 1
+            else:
+                self.lang_bag_str.data = "nothing"
+
         self.lock.release()
 
     def reset_intersection_collection(self):
         # self.remaining_intersection = random.randint(3, 7)
         self.remaining_intersection = 1
-        threading.Timer(0.5, self.data_set.new_sequence).start()
+        threading.Timer(0.5, self.dataset.new_sequence).start()
         # threading.Timer(random.uniform(0.5, 1.8), self.data_set.new_sequence).start()
 
     def direction(self, degree):
         norm_degree = Utility.degree_norm(degree)*180/math.pi
         if Utility.in_threshold(norm_degree, 90, degree_delta):
-            return self.data_set.get_right()
+            return self.dataset.get_right()
 
         elif Utility.in_threshold(norm_degree, -90, degree_delta):
-            return self.data_set.get_left()
+            return self.dataset.get_left()
 
         elif Utility.in_threshold(norm_degree, 0, degree_delta):
-            return self.data_set.get_forward()
+            return self.dataset.get_forward()
 
         else:
             return "Turning around"
 
+    def add_lang_str(self, lang_srt):
+        self.lock.acquire()
+
+        if self.lang_bag_str.data == "nothing":
+            self.lang_bag_str.data = ""
+        if  self.lang_bag_str.data != "":
+            self.lang_bag_str.data += " and "
+        self.lang_bag_str.data += lang_srt
+        self.remaining_laser_scan = random.randint(0, 5)  # make sure we have enough data before saving new sequence
+        self.not_change = 6
+
+        self.lock.release()
 
     def check_next_intersection(self):
         if Utility.distance_vector(self.list_intersection[self.next_pose].pose, self.pose) < intersection_r:
@@ -188,13 +218,13 @@ class Robot:
             if num_ways == 1:
                 str_msg.data = "Dead end"
             if num_ways == 2:
-                str_msg.data = self.data_set.get_corner()
+                str_msg.data = self.dataset.get_corner()
             elif num_ways == 3:
-                str_msg.data = self.data_set.get_intersection()
+                str_msg.data = self.dataset.get_intersection()
                 index = random.randint(0, 1)
 
             if (self.data_set_ver == 1):
-                self.data_set.write_bag(self.language_topic, str_msg)
+                self.dataset.write_bag(self.language_topic, str_msg)
             elif(self.data_set_ver == 2):
                 self.lang_bag_str= str_msg
 
@@ -206,7 +236,7 @@ class Robot:
             str_msg = String()
             str_msg.data = self.direction(degree)
             if (self.data_set_ver == 1):
-                self.data_set.write_bag(self.language_topic, str_msg)
+                self.dataset.write_bag(self.language_topic, str_msg)
             elif(self.data_set_ver == 2):
                 self.lang_bag_str.data = self.lang_bag_str.data + " " + str_msg.data
 
@@ -231,4 +261,4 @@ class Robot:
                 self.reset_intersection_collection()
         else:
             if self.not_change <= 0:
-                self.lang_bag_str.data = "continue straight"
+                self.lang_bag_str.data = "nothing"
