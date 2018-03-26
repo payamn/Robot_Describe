@@ -51,8 +51,8 @@ class EncoderRNN(nn.Module):
         self.conv = nn.Conv1d(input_size, hidden_size, 4)
         self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
 
-        self.linear = nn.Linear(hidden_size*(360-3), int(self.hidden_size*2/3))
-        self.linear2 = nn.Linear(3, int(self.hidden_size/3))
+        self.linear = nn.Linear(hidden_size*(360-3), int(self.hidden_size))
+        self.linear2 = nn.Linear(3, int(self.hidden_size/4))
         self.gru = nn.GRU(hidden_size, hidden_size, batch_first=True)
 
     def forward(self, laser_input, speed_input, hidden):
@@ -60,9 +60,10 @@ class EncoderRNN(nn.Module):
         noisy_laser_input = self.noise(laser_input)
         conv = self.conv(noisy_laser_input.view(batch_size, 1, 360))
         laser_out = self.linear(conv.view(batch_size, 1, -1))
-        speed_input = speed_input.unsqueeze(1)
-        speed_out = self.linear2(speed_input)
-        output = torch.cat((speed_out, laser_out),2)
+        # speed_input = speed_input.unsqueeze(1)
+        # speed_out = self.linear2(speed_input)
+        # output = torch.cat((speed_out, laser_out),2)
+        output = laser_out
         for i in range(self.n_layers):
             output, hidden = self.gru(output, hidden)
         return output, hidden
@@ -109,7 +110,7 @@ class Model:
         self.dataset = robot.dataset
 
         plt.ion()
-        hidden_size = 300
+        hidden_size = 500
         self.learning_rate = learning_rate
         self.best_lost = sys.float_info.max
 
@@ -218,7 +219,7 @@ class Model:
     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=10, save=True):
         start = time.time()
         n_iters = self.start_epoch + n_iters
-        criterion = nn.NLLLoss(size_average=False)
+        criterion = nn.NLLLoss()
 
         for iter in range(self.start_epoch, n_iters):
             epoch_loss_total = 0
@@ -269,10 +270,12 @@ class Model:
                     self.logger.scalar_summary(tag, value, iter*batch_size+ batch )
 
 
+            epoch_accuracy = np.mean(epoch_accuracy)
+
             print('Iteration %s (%d %f%%) %.4f avg: %.4f acc:%.4f' %
                   (self.timeSince(start, (iter+1) / n_iters),
                   (iter + 1), (iter+1) / float(n_iters) * 100, epoch_loss_total,
-                   epoch_loss_total/((len(self.dataset.list_data)/batch_size)*batch_size),accuracy))
+                   epoch_loss_total/((len(self.dataset.list_data)/batch_size)*batch_size),epoch_accuracy))
 
             is_best = self.best_lost > epoch_loss_total
             if (self.best_lost > epoch_loss_total and save == True):
@@ -294,7 +297,6 @@ class Model:
             #     for i in range(int (len(self.dataset.list_data))-1):
             #         error += self.evaluate_check(self.dataset._max_length_laser)
             #     self.acc = 1- float(error)/((len(self.dataset.list_data))-1)
-            epoch_accuracy = np.mean(epoch_accuracy)
             info = {
                 'Epoch_loss':  epoch_loss_total/((len(self.dataset.list_data)/batch_size)*batch_size),
                 'Epoch_accuracy': epoch_accuracy
