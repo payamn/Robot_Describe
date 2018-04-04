@@ -9,6 +9,7 @@ from sensor_msgs.msg import LaserScan
 
 from std_msgs.msg import String
 import random
+import tf
 from tf import TransformListener
 import numpy as np
 import threading
@@ -28,6 +29,9 @@ class GenerateMap:
         self.points_description = []
         self.tf_listner = TransformListener()
         self.sentences = ["room", "T junction", "Corner"]
+        self.classes = {"room_right": 0, "room_left": 1,
+                         "corner_left": 2, "corner_right": 3,
+                        "t_junction_right_forward": 4, "t_junction_right_left": 5, "t_junction_left_forward": 6}
         self.sentences_index = 0
 
     def callback_point(self, data):
@@ -41,6 +45,7 @@ class GenerateMap:
         my_robot.save_bag_scan_laser(scan)
 
     def callback_robot_0(self, odom_data, my_robot):
+
         t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map")
         position, quaternion = self.tf_listner.lookupTransform("/map", "/robot_0/base_link", t)
         # print position
@@ -63,7 +68,8 @@ class GenerateMap:
                                                                      odom_data.pose.pose.orientation.y,
                                                                      odom_data.pose.pose.orientation.z)
 
-        list_index = closest_node(np.asarray([pose[0], pose[1]]), self.points_description, robot_orientation_degree, 1.5)
+        list_index = closest_node(np.asarray([pose[0], pose[1]]), self.points_description, robot_orientation_degree, 1.5
+                                  , self.tf_listner)
         for index in list_index:
             happend_recently = False
             for point in self.prev_points:
@@ -153,8 +159,17 @@ def corner(degree):
 
 lang_dic = {"room":room, "T junction":t_junction, "Corner":corner}
 
+def make_pose_stamped(pose, degree):
+    out = PoseStamped()
+    out.header.frame_id = "/map"
+    out.header.stamp = rospy.Time(0)
+    out.pose.position.z = 0
+    out.pose.position.x = pose[0]
+    out.pose.position.y = pose[1]
+    out.pose.orientation.w = degree
+    return out
 
-def closest_node(robot_pos, nodes, degree_robot, max_r):
+def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
     nodes_pos = np.asarray(nodes[0])
     list_return_index = []
     min_dist = 100
@@ -169,7 +184,10 @@ def closest_node(robot_pos, nodes, degree_robot, max_r):
         if (dist < max_r):
             degree = degree_to_object(nodes[1][index][0], degree_robot[2])
             print(lang_dic[nodes[1][index][1]](degree), dist)
+            pose = make_pose_stamped(point, nodes[1][index][0])
 
+            pose2 = tf_listner.transformPose("/robot_0/base_link", pose)
+            print (pose2.pose.position.x, pose2.pose.position.y)
             # print degree_diff
             # if (degree_diff<40 and degree_diff>-40):
             #     list_return_index.append(index)
