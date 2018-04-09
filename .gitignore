@@ -4,3 +4,4 @@ bag*
 check_points*
 *.pyc
 **/logs/*
+**/dataset/*

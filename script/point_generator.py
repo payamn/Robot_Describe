@@ -138,8 +138,6 @@ def write_to_pickle():
             if cmd == "show":
                 print points_description
 
-
-
     pickle.dump(points_description,
                 open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "wb"))
 

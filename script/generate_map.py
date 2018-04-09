@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 import rospy
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 
 from move_base_msgs.msg import MoveBaseActionGoal
 # from numpy.doc.constants import prev
 from sensor_msgs.msg import LaserScan
+import cv2
 
 from std_msgs.msg import String
 import random
@@ -17,22 +18,67 @@ import rospkg
 from utility import *
 import pickle
 import math
-from robot import *
-
+from utils import model_utils
 
 class GenerateMap:
-    def __init__(self):
+    def __init__(self, start_pickle = 0):
         points = []
         rospy.init_node('GenerateMap')
-        self.prev_points = [[0, 0] for x in range(5)]
+        self.prev_points = [([0, 0],0 )for x in range(10)]
         self.index_prev_points = 0
         self.points_description = []
         self.tf_listner = TransformListener()
-        self.sentences = ["room", "T junction", "Corner"]
-        self.classes = {"room_right": 0, "room_left": 1,
-                         "corner_left": 2, "corner_right": 3,
-                        "t_junction_right_forward": 4, "t_junction_right_left": 5, "t_junction_left_forward": 6}
+        self.word_encoding = model_utils.WordEncoding()
+        self.sentences = self.word_encoding.sentences
+        self.classes = self.word_encoding.classes
         self.sentences_index = 0
+        self.max_distace = 3
+        self.pose = (10, 10, 0)
+        self.robot_orientation_degree = (0,0,0)
+        self.map = None
+        self.language = None
+        self.data_pointer = 0
+        self.laser_list = []
+        self.speed_list = []
+        self.local_map_list = []
+        self.current_speed = None
+        self.len_to_save = 20
+        self.pickle_counter = start_pickle
+        self.stop = True
+        self.skip_couter = 10
+        self.skip_len = 10
+
+    def save_pickle(self):
+        lasers = []
+        speeds = []
+        local_maps = []
+        for index in range(self.len_to_save):
+            lasers = self.laser_list[self.data_pointer:] + self.laser_list[0:self.data_pointer]
+            speeds = self.speed_list[self.data_pointer:] + self.speed_list[0:self.data_pointer]
+            local_maps = self.local_map_list[self.data_pointer:] + self.local_map_list[0:self.data_pointer]
+        print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
+        data = {"laser_scans":lasers, "speeds":speeds, "local_maps":local_maps, "language":self.language}
+        pickle.dump(data,
+                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/{}.pkl".format(self.pickle_counter), "wb"))
+        self.pickle_counter += 1
+
+    def add_data(self, laser, local_map): # add a data to local_map list
+        if self.stop:
+            return
+
+        if len(self.speed_list) != self.len_to_save:
+            self.speed_list.append(self.current_speed)
+            self.laser_list.append(laser)
+            self.local_map_list.append(local_map)
+        else:
+            self.speed_list[self.data_pointer] = self.current_speed
+            self.laser_list[self.data_pointer] = laser
+            self.local_map_list[self.data_pointer] = local_map
+            self.data_pointer = (self.data_pointer + 1) % self.len_to_save
+            self.skip_couter -= 1
+            if (self.skip_couter < 0):
+                self.save_pickle()
+                self.skip_couter = self.skip_len
 
     def callback_point(self, data):
         _, _, z = Utility.quaternion_to_euler_angle(data.pose.orientation.w, data.pose.orientation.x,
@@ -41,49 +87,56 @@ class GenerateMap:
         self.points_description.append(point)
         print('one Point for %s saved' % self.points_description[-1][2])
 
-    def callback_laser_scan(self, scan, my_robot):
-        my_robot.save_bag_scan_laser(scan)
+    def get_local_map(self):
+        image = sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
+                          self.max_distace * 2, self.max_distace * 2)
+        cv2.imshow("local", image)
+        cv2.waitKey(1)
+        return image
 
-    def callback_robot_0(self, odom_data, my_robot):
+    def callback_laser_scan(self, scan):
+        if self.map is None or self.current_speed is None or self.language is None:
+            return
+        local_map = self.get_local_map()
+        laser_data = [float(x) / scan.range_max for x in scan.ranges]
+        self.add_data(laser_data, local_map)
+
+    def callback_robot_0(self, odom_data):
 
         t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map")
         position, quaternion = self.tf_listner.lookupTransform("/map", "/robot_0/base_link", t)
-        # print position
+        if (
+                odom_data.twist.twist.linear.x == 0 and
+                odom_data.twist.twist.linear.y == 0 and
+                odom_data.twist.twist.angular.z == 0
+            ):
+            self.stop = True
+            return
+        else:
+            self.stop = False
+            self.current_speed = \
+                (odom_data.twist.twist.linear.x, odom_data.twist.twist.linear.y, odom_data.twist.twist.angular.z)
 
-        #debug commented
-        # if (
-        #         odom_data.twist.twist.linear.x == 0 and
-        #         odom_data.twist.twist.linear.y == 0 and
-        #         odom_data.twist.twist.angular.z == 0
-        #     ):
-        #     my_robot.set_stop(True)
-        #     return
-        # else:
-        #     my_robot.set_stop(False)
-        #     my_robot.set_speed(odom_data.twist.twist)
-
-        pose = position
-        robot_orientation_degree = Utility.quaternion_to_euler_angle(odom_data.pose.pose.orientation.w,
+        self.pose = position
+        self.robot_orientation_degree = Utility.quaternion_to_euler_angle(odom_data.pose.pose.orientation.w,
                                                                      odom_data.pose.pose.orientation.x,
                                                                      odom_data.pose.pose.orientation.y,
                                                                      odom_data.pose.pose.orientation.z)
 
-        list_index = closest_node(np.asarray([pose[0], pose[1]]), self.points_description, robot_orientation_degree, 1.5
+        return_nodes = closest_node(np.asarray([self.pose[0], self.pose[1]]), self.points_description, self.robot_orientation_degree, self.max_distace
                                   , self.tf_listner)
-        for index in list_index:
+        for index, nodes in enumerate(return_nodes):
             happend_recently = False
             for point in self.prev_points:
-                if point[0] == self.points_description[0][index][0] and point[1] == self.points_description[0][index][1]:
+                if point[0][0] == self.points_description[0][nodes[0]][0] and point[0][1] == self.points_description[0][nodes[0]][1]:
                     happend_recently = True
                     break
             if happend_recently:
-                continue
-            self.prev_points[self.index_prev_points] = self.points_description[0][index]
-            self.index_prev_points = (self.index_prev_points + 1) % 5
+                return_nodes[index] = (nodes[0], point[1], nodes[2])
+            self.prev_points[self.index_prev_points] = (self.points_description[0][nodes[0]], nodes[1])
+            self.index_prev_points = (self.index_prev_points + 1) % 10
+        self.language = return_nodes
 
-            # print self.points_description[0][index]
-            # print (self.points_description[1][index][1])
-            my_robot.add_lang_str(self.points_description[1][index][1])
 
     def read_from_pickle(self):
         self.points_description = pickle.load(
@@ -91,12 +144,11 @@ class GenerateMap:
         position_points = [[i[0].x, i[0].y] for i in self.points_description]
         description_degree = [[i[1], i[2]] for i in self.points_description]
         # for points in description_degree:
-        #     print points
         self.points_description = [position_points, description_degree]
         print description_degree
-        robot = Robot(True, 2, start_index_dataset=0, use_direction_file=False, bag_name="/bag_train/")
-        rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.callback_robot_0, robot)
-        rospy.Subscriber("/robot_0/base_scan_1", LaserScan, self.callback_laser_scan, robot)
+        rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.callback_robot_0)
+        rospy.Subscriber("/robot_0/base_scan_1", LaserScan, self.callback_laser_scan)
+        rospy.Subscriber("/map", OccupancyGrid, self.call_back_map)
         rospy.spin()
 
     def append_to_pickle(self):
@@ -122,9 +174,49 @@ class GenerateMap:
         pickle.dump(self.points_description,
                     open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "wb"))
 
+
+
+    def call_back_map(self, data):
+        print (len(data.data))
+        map_array = np.array(data.data).reshape((data.info.height, data.info.width))
+        map_array = normalize(map_array)
+        self.map = map_array, data.info.resolution
+
+
+def normalize(data):
+    data -= data.min()
+    data /= (data.max() - data.min())
+    data *= 255
+    data = data.astype(np.uint8)
+    return data
+
+def sub_image(image, resolution, center, theta, width, height):
+    '''
+    Rotates OpenCV image around center with angle theta (in deg)
+    then crops the image according to width and height.
+    '''
+    center = (center[0]/resolution, center[1]/resolution)
+    width = int(width / resolution)
+    height = int (height/ resolution)
+    # Uncomment for theta in radians
+    # theta *= 180/np.pi
+
+    shape = image.shape[:2]
+
+    matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
+    image = cv2.warpAffine(image, matrix, (shape[1],shape[0]))
+    x = int(center[0] - width / 2)
+    y = int(center[1] - height / 2)
+
+    cv2.imshow("map1", image)
+    cv2.waitKey(1)
+    image = image[y:y + height, x:x + width]
+
+    return image
+
 def degree_to_object(degree_object, degree_robot):
     degree_diff = (degree_robot - degree_object) * math.pi / 180
-    degree_diff = arctan2(sin(degree_diff), cos(degree_diff)) * 180 / math.pi
+    degree_diff = np.arctan2(math.sin(degree_diff), math.cos(degree_diff)) * 180 / math.pi
     return degree_diff
 
 def room(degree):
@@ -143,7 +235,7 @@ def t_junction(degree):
     elif 50<degree<130:
         class_prediction = "t_junction_left_forward"
     else:
-        rospy.logerr("unknown intersection")
+        # rospy.logerr("unknown intersection")
         class_prediction = "t_junction"
 
     return class_prediction
@@ -171,30 +263,19 @@ def make_pose_stamped(pose, degree):
 
 def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
     nodes_pos = np.asarray(nodes[0])
-    list_return_index = []
+    list_return = []
     min_dist = 100
     for index,point in enumerate(nodes_pos):
         dist = np.linalg.norm(point - robot_pos)
-        # print dist
         min_dist = min(min_dist, dist)
-        # print degree_robot, math.pi
-        # degree = degree_robot[2] * math.pi / 180
-        # print degree_robot[2], arctan2(sin(degree), cos(degree))* 180 / math.pi
 
         if (dist < max_r):
             degree = degree_to_object(nodes[1][index][0], degree_robot[2])
-            print(lang_dic[nodes[1][index][1]](degree), dist)
             pose = make_pose_stamped(point, nodes[1][index][0])
-
             pose2 = tf_listner.transformPose("/robot_0/base_link", pose)
-            print (pose2.pose.position.x, pose2.pose.position.y)
-            # print degree_diff
-            # if (degree_diff<40 and degree_diff>-40):
-            #     list_return_index.append(index)
-    return list_return_index
+            list_return.append((index, lang_dic[nodes[1][index][1]](degree), (pose2.pose.position.x, pose2.pose.position.y)))
 
-
-
+    return list_return
 
 
 if __name__ == '__main__':
