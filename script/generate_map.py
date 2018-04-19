@@ -19,6 +19,7 @@ from utility import *
 import pickle
 import math
 from utils import model_utils
+from utils.configs import *
 
 class GenerateMap:
     def __init__(self, start_pickle = 0):
@@ -45,8 +46,8 @@ class GenerateMap:
         self.len_to_save = 20
         self.pickle_counter = start_pickle
         self.stop = True
-        self.skip_couter = 10
-        self.skip_len = 10
+        self.skip_couter = 4
+        self.skip_len = 4
 
     def save_pickle(self):
         lasers = []
@@ -59,7 +60,7 @@ class GenerateMap:
         print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
         data = {"laser_scans":lasers, "speeds":speeds, "local_maps":local_maps, "language":self.language}
         pickle.dump(data,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/{}.pkl".format(self.pickle_counter), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     def add_data(self, laser, local_map): # add a data to local_map list
@@ -133,14 +134,14 @@ class GenerateMap:
                     break
             if happend_recently:
                 return_nodes[index] = (nodes[0], point[1], nodes[2])
-            self.prev_points[self.index_prev_points] = (self.points_description[0][nodes[0]], nodes[1])
+            self.prev_points[self.index_prev_points] = (self.points_description[0][return_nodes[index][0]], return_nodes[index][1])
             self.index_prev_points = (self.index_prev_points + 1) % 10
         self.language = return_nodes
 
 
     def read_from_pickle(self):
         self.points_description = pickle.load(
-            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "rb"))
+            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
         position_points = [[i[0].x, i[0].y] for i in self.points_description]
         description_degree = [[i[1], i[2]] for i in self.points_description]
         # for points in description_degree:
@@ -153,7 +154,7 @@ class GenerateMap:
 
     def append_to_pickle(self):
         self.points_description = pickle.load(
-            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "rb"))
+            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
         self.write_to_pickle()
 
     def write_to_pickle(self):
@@ -172,7 +173,7 @@ class GenerateMap:
                     print self.points_description
 
         pickle.dump(self.points_description,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "wb"))
 
 
 
@@ -195,16 +196,21 @@ def sub_image(image, resolution, center, theta, width, height):
     Rotates OpenCV image around center with angle theta (in deg)
     then crops the image according to width and height.
     '''
-    center = (center[0]/resolution, center[1]/resolution)
     width = int(width / resolution)
-    height = int (height/ resolution)
+    height = int(height / resolution)
+    center = (center[0]/resolution+height, center[1]/resolution+width)
+
     # Uncomment for theta in radians
     # theta *= 180/np.pi
 
+    image = cv2.copyMakeBorder(image, top=height, bottom=height, left=width, right=width,
+                               borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
     shape = image.shape[:2]
 
     matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
     image = cv2.warpAffine(image, matrix, (shape[1],shape[0]))
+
+
     x = int(center[0] - width / 2)
     y = int(center[1] - height / 2)
 
@@ -287,10 +293,10 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap()
+    generate_map = GenerateMap(start_pickle=0)
 
     if args.generate_point:
-        generate_map.append_to_pickle()
+        generate_map.write_to_pickle()
     else:
         generate_map.read_from_pickle()
 

@@ -11,6 +11,9 @@ class WordEncoding:
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
 
+    def len_classes(self):
+        return len(self.classes)
+
     def get_object_class(self, object):
         if object[1] in self.classes:
             return self.classes[object[1]], object[2]

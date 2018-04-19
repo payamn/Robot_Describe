@@ -16,8 +16,9 @@ import rospkg
 from utility import *
 import pickle
 import math
+from utils.configs import *
 
-is_write = False
+is_write = True
 use_full_sentences = ["room on right side", "room on left side","T junction", "Corner, Left Turn", "Corner, Right turn", "Long Corridor", "Narrow Corridor", "Turn Left or Right", "Go Forward or Right", "Go left or Forward" ]
 index_senteces = 0
 points_description = []
@@ -139,14 +140,14 @@ def write_to_pickle():
                 print points_description
 
     pickle.dump(points_description,
-                open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "wb"))
+                open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "wb"))
 
     rospy.spin()
 def read_from_pickle():
     global points_description, tf_listner
     rospy.init_node('point_test')
     tf_listner = TransformListener()
-    points_description = pickle.load(open(rospkg.RosPack().get_path('robot_describe') + "/script/data/points_describtion.p", "rb"))
+    points_description = pickle.load(open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
     position_points = [[i[0].x, i[0].y] for i in points_description]
     description_degree = [[i[1], i[2]] for i in points_description]
     # for points in description_degree:
