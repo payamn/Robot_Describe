@@ -94,17 +94,17 @@ class Network_Map(nn.Module):
         super(Network_Map, self).__init__()
         self.input_size = input_size
         self.numb_of_prediction = num_of_prediction
-        self.conv = nn.Conv2d(input_size, 256, 6)
-        self.conv2 = nn.Conv2d(256, 128, 5, stride=2)
-        self.conv3 = nn.Conv2d(128, 64, 4, stride=2)
-        self.conv4 = nn.Conv2d(64, 32, 3, stride=1)
-        self.conv5 = nn.Conv2d(32, 16, 3, stride=1)
-        self.conv6 = nn.Conv2d(16, 16, 3, stride=1)
+        self.conv = nn.Conv2d(input_size, 256, 7)
+        self.conv2 = nn.Conv2d(256, 128, 6, stride=2)
+        self.conv3 = nn.Conv2d(128, 64, 5, stride=2)
+        self.conv4 = nn.Conv2d(64, 32, 4, stride=1)
+        self.conv5 = nn.Conv2d(32, 16, 3, stride=2)
+        self.conv6 = nn.Conv2d(16, 16, 2, stride=2)
 
         self.output_size = output_size
-        self.linear = nn.Linear(32 * 9 * 9, 16)
+        self.linear = nn.Linear(32 * 7 * 7, 16)
         self.linear2 = nn.Linear(16,  2 * num_of_prediction)
-        self.linear3 = nn.Linear(400, self.output_size * num_of_prediction)
+        self.linear3 = nn.Linear(16, self.output_size * num_of_prediction)
         self.soft_max = nn.LogSoftmax(dim=3)
 
     def forward(self, map):
@@ -183,7 +183,7 @@ class Map_Model:
         self.prev_loss = None
         self.loss = None
         self.start_epoch = 0
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=0.06)
         self.project_path = "."
         if resume_path is not None and load_weight:
             self.project_path = os.path.dirname(resume_path)
@@ -193,7 +193,7 @@ class Map_Model:
                 self.start_epoch = checkpoint['epoch']
                 self.best_lost = checkpoint['epoch_lost']
                 self.model.load_state_dict(checkpoint['model_dict'])
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
+                # self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
@@ -251,7 +251,7 @@ class Map_Model:
             loss_classes += criterion_classes(output_classes, word_encoded_class)
             loss_poses += criterion_poses(output_poses, word_encoded_pose)
 
-            loss_total = loss_poses + 3 * loss_classes
+            loss_total = loss_poses + 10 * loss_classes
 
             epoch_loss_classes += loss_classes.data[0] / word_encoded_class.size()[0]
             epoch_loss_poses += loss_poses.data[0] / word_encoded_class.size()[0]
@@ -372,7 +372,7 @@ class Map_Model:
                 }
 
                 for tag, value in info.items():
-                    self.logger.scalar_summary(tag, value, iter*(len(self.dataset)//batch_size)*batch_size+ batch )
+                    self.logger.scalar_summary(tag, value, iter*(len(self.dataset)//batch_size)+ batch )
 
 
             epoch_accuracy_classes = np.mean(epoch_accuracy_classes)

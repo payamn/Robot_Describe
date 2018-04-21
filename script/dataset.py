@@ -75,6 +75,10 @@ class Map_Dataset(Dataset):
             word_encoded_class, word_encoded_pose = zip(*word_encoded)
             local_maps = dic_data["local_maps"]
             local_maps = torch.from_numpy(np.stack(local_maps[19])).type(torch.FloatTensor)
+            word_encoded_pose = [x for x in enumerate(word_encoded_pose)]
+            word_encoded_pose.sort(key=lambda l: (l[1][0], l[1][1]))
+            word_encoded_class = [word_encoded_class[word_encoded_pose[x][0]] for x in range(len(word_encoded_class))]
+            word_encoded_pose = [x[1] for x in word_encoded_pose]
             word_encoded_pose = torch.FloatTensor(word_encoded_pose)
             word_encoded_class = torch.LongTensor(word_encoded_class)
             return word_encoded_class, word_encoded_pose, local_maps
