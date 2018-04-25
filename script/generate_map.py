@@ -90,7 +90,7 @@ class GenerateMap:
 
     def get_local_map(self):
         image = sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
-                          self.max_distace * 2, self.max_distace * 2)
+                          self.max_distace * 4, self.max_distace * 4)
         cv2.imshow("local", image)
         cv2.waitKey(1)
         return image
@@ -293,7 +293,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=0)
+    generate_map = GenerateMap(start_pickle=482)
 
     if args.generate_point:
         generate_map.write_to_pickle()

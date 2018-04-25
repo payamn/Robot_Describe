@@ -61,13 +61,17 @@ class Map_Dataset(Dataset):
         self.prediction_number = prediction_number
         self.word_encoding = model_utils.WordEncoding()
 
+
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, i):
         with open(self.files[i], 'rb') as f:
-            dic_data = pickle.load(f)
-
+            try:
+                dic_data = pickle.load(f)
+            except ValueError:
+                print (self.files[i])
+                exit(0)
             language = dic_data["language"] if len(dic_data["language"]) > 0 else [(-1, "noting", (0, 0))]
             word_encoded = list(map(self.word_encoding.get_object_class, language))
             for index in range(self.prediction_number - len(word_encoded)):
@@ -81,7 +85,7 @@ class Map_Dataset(Dataset):
             word_encoded_pose = [x[1] for x in word_encoded_pose]
             word_encoded_pose = torch.FloatTensor(word_encoded_pose)
             word_encoded_class = torch.LongTensor(word_encoded_class)
-            return word_encoded_class, word_encoded_pose, local_maps
+        return word_encoded_class, word_encoded_pose, local_maps
 
 
 
