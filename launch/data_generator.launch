@@ -5,7 +5,7 @@
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
-	<arg name="map_name" default="real_1" />
+	<arg name="map_name" default="real_2" />
 
 
 	<param name="/use_sim_time" value="true"/>
@@ -14,6 +14,7 @@
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/$(arg map_name).world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
+		<param name="map_name" value="$(arg map_name)"/>
 	</node>
 
 
@@ -39,7 +40,7 @@
 
 	<node name="map_server" pkg="map_server" type="map_server"
 	args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="screen"/>
-	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="23.05 8.7 0 0 0 0 -1 map $(arg odom_frame) 100" />
+	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="30.15 26.5 0 0 0 0 -1 map $(arg odom_frame) 100" />
 	<include file="$(find robot_describe)/launch/amcl.launch">
 		<remap from="scan" to="robot_0/base_scan_1"/>
 		<param name="odom_frame_id" value="$(arg odom_frame)"/>

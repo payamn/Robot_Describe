@@ -5,7 +5,7 @@
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
-
+	<param name="map_name" value="real_2"/>
     <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 		<remap from="scan" to="robot_0/base_scan_1"/>
 		<param name="odom_frame" value="$(arg odom_frame)"/>
@@ -26,7 +26,7 @@
 		<!--<remap from="/move_base_simple/goal" to="/move_base_flex/current_goal"/>-->
 	</node>
 
-	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/real_1.world">
+		<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/$(param map_name).world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>

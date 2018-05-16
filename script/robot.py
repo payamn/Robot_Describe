@@ -1,18 +1,14 @@
-import rospy
-from nav_msgs.msg import Odometry
-# from move_base_msgs.msg import MoveBaseActionGoal
-from mbf_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import PoseStamped, Twist
-
-from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String
-import random
-from numpy import *
-import threading
 import rospkg
-from dataset_prev import *
-from utility import *
+
 import actionlib
+import rospy
+from geometry_msgs.msg import PoseStamped, Twist
+from mbf_msgs.msg import MoveBaseAction
+from numpy import *
+from script.prev_dataset.dataset_prev import *
+from std_msgs.msg import String
+from utility import *
+
 
 class IntersectionNode:
     def __init__(self, pose, connected_nodes):

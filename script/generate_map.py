@@ -46,8 +46,8 @@ class GenerateMap:
         self.len_to_save = 20
         self.pickle_counter = start_pickle
         self.stop = True
-        self.skip_couter = 4
-        self.skip_len = 4
+        self.skip_couter = 2
+        self.skip_len = 2
 
     def save_pickle(self):
         lasers = []
@@ -60,7 +60,7 @@ class GenerateMap:
         print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
         data = {"laser_scans":lasers, "speeds":speeds, "local_maps":local_maps, "language":self.language}
         pickle.dump(data,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     def add_data(self, laser, local_map): # add a data to local_map list
@@ -255,7 +255,7 @@ def corner(degree):
     return class_prediction
 
 
-lang_dic = {"room":room, "T junction":t_junction, "Corner":corner}
+lang_dic = {"room":room, "t_junction":t_junction, "corner":corner}
 
 def make_pose_stamped(pose, degree):
     out = PoseStamped()
@@ -293,7 +293,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=482)
+    generate_map = GenerateMap(start_pickle=0)
 
     if args.generate_point:
         generate_map.write_to_pickle()

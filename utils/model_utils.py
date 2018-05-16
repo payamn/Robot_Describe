@@ -8,21 +8,24 @@ class WordEncoding:
     def __init__(self):
         self.sos = "[sos]"
         self.eos = "[eos]"
-        self.sentences = ["room", "T junction", "Corner"]
+        self.sentences = ["room", "t_junction", "corner", "noting"]
         classes = ["room_right", "room_left",
                         "corner_left", "corner_right",
                         "t_junction_right_forward", "t_junction_right_left", "t_junction_left_forward", "t_junction","noting"]
 
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
-
+        self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
     def len_classes(self):
         return len(self.classes)
+
+    def get_parent_class(self, idx):
+        return self.parent_class_dic[idx]
 
     def visualize_map(self, map_data, class_info_list, pose_info_list, base_line_class, base_line_pose):
         print "\n\n"
         base_line_class = base_line_class.cpu().data
-        map_data = np.reshape(map_data.cpu().data.numpy(), (map_data.shape[2], map_data.shape[3], 1))
+        map_data = np.reshape(map_data.cpu().data.numpy(), (map_data.shape[1], map_data.shape[2], 1))
         backtorgb = cv.cvtColor(map_data, cv.COLOR_GRAY2RGB)
         predict = []
         target = []
@@ -40,12 +43,13 @@ class WordEncoding:
                 target.append((pose, self.get_class_char( base_line_class[0][index])))
                 cv.circle(backtorgb, pose , 4, (0,255,0))
         cv.imshow("map", backtorgb)
-        cv.waitKey(100)
+
         print ("predict:")
         print predict
         print ("target")
         print target
         print ("finished")
+        cv.waitKey()
         # plt.show()
 
     def get_object_class(self, object):

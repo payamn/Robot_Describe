@@ -1,1 +1,1 @@
-MAP_NAME = "real_1"
+MAP_NAME = "real_2"
