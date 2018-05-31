@@ -18,5 +18,8 @@ cost_scaling_factor: 10.0
 lethal_cost_threshold: 10
 unknown_cost_value: 255
 observation_sources: robot_0/base_scan_1
-base_scan: {data_type: LaserScan, expected_update_rate: 10,
-  observation_persistence: 0.0, marking: true, clearing: true, max_obstacle_height: 0.4, min_obstacle_height: 0.08}
+robot_0/base_scan_1: {
+  data_type: LaserScan, expected_update_rate: 10,
+  observation_persistence: 0.0, marking: true, clearing: true, max_obstacle_height: 0.4, min_obstacle_height: 0.08,
+}
+

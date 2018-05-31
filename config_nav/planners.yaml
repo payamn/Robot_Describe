@@ -1,11 +1,12 @@
 planners:
   - name: 'planner'
     type: 'global_planner/GlobalPlanner'
+base_global_planner: global_planner/GlobalPlanner
 planner:
-  allow_unknown: false
-  default_tolerance: 0.0
+  allow_unknown: False
+  default_tolerance: 0.5
   visualize_potential: false
-  use_dijkstra: true
+  use_dijkstra: True
   use_quadratic: false
   use_grid_path: false
   old_navfn_behaviour: false

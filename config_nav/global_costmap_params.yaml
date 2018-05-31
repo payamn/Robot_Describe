@@ -7,7 +7,7 @@
 GlobalPlanner:
   allow_unknown: true
   default_tolerance: 0.5
-  # visualize_potential: true 
+  # visualize_potential: true
   old_navfn_behavior: false
   use_quadratic: true
   use_grid_path: false
@@ -16,13 +16,13 @@ GlobalPlanner:
 
 #Independent settings for the planner's costmap
 global_costmap: 
-  global_frame: /map
+  global_frame: /map_server
   robot_base_frame: robot_0/base_link
   update_frequency: 1.0
   publish_frequency: 1.0
   static_map: true
   width: 100.0
   height: 100.0
-  rolling_window: true
+  rolling_window: false
 #  inflation_layer:
 #    inflation_radius: 2.5

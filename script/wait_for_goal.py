@@ -26,6 +26,7 @@ class WaitForGoal(smach.State):
             time.sleep(rate)
 
         userdata.target_pose = self.global_target_pose
+        print self.global_target_pose
         print "Target Pose:", self.global_target_pose.pose.position.x, self.global_target_pose.pose.position.y,\
               self.global_target_pose.pose.position.z
         if rospy.is_shutdown():

@@ -39,31 +39,40 @@
 	</node>
 
 	<node name="map_server" pkg="map_server" type="map_server"
-	args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="screen"/>
-	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="30.15 26.5 0 0 0 0 -1 map $(arg odom_frame) 100" />
-	<include file="$(find robot_describe)/launch/amcl.launch">
-		<remap from="scan" to="robot_0/base_scan_1"/>
-		<param name="odom_frame_id" value="$(arg odom_frame)"/>
-		<param name="base_frame_id" value="$(arg base_frame)"/>
-		<param name="global_frame_id" value="map"/>
-	</include>
+		args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="screen">
+		<param name="frame_id" value="map_server" />
+	</node>
+	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="-30.15 -26.5 0 0 0 0 -1  $(arg odom_frame) map_server 20" />
+	<!--<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="30.15 26.5 0 0 0 0 -1 gmap $(arg odom_frame) 100" />-->
 
-	<!-- <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+	<!--<include file="$(find robot_describe)/launch/amcl.launch">-->
+		<!--<remap from="scan" to="robot_0/base_scan_1"/>-->
+		<!--<param name="odom_frame_id" value="$(arg odom_frame)"/>-->
+		<!--<param name="base_frame_id" value="$(arg base_frame)"/>-->
+		<!--<param name="global_frame_id" value="amcl_map"/>-->
+		<!---->
+	<!--</include>-->
+
+	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 		<remap from="scan" to="robot_0/base_scan_1"/>
+		<remap from="map" to="gmap"/>
+
 		<param name="odom_frame" value="$(arg odom_frame)"/>
 		<param name="base_frame" value="$(arg base_frame)"/>
 		<param name="map_frame" value="map"/>
 	    <param name="map_update_interval" value="0.025"/>
 	    <param name="particles" value="20" />
 	    <param name="delta" value="0.05"/>
-	    <param name="maxRange" value="7"/>
+	    <param name="maxRange" value="5"/>
 	    <param name="xmin" value="-10"/>
+
 	    <param name="ymin" value="-10"/>
 	    <param name="xmax" value="10"/>
 	    <param name="ymax" value="10"/>
-	    <rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />
-	</node>
- -->
+		<param name="global_frame_id" value="map"/>
+
+	    <!--<rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />-->
+		</node>
 	<!--<include file="$(find robot_describe)/config_nav/move_base.xml" />-->
 
 

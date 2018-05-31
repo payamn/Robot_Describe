@@ -11,19 +11,38 @@ from mbf_msgs.msg import GetPathResult
 from mbf_msgs.msg import RecoveryAction
 from mbf_msgs.msg import RecoveryResult
 
+
 from geometry_msgs.msg import PoseStamped
+
+from utility import Utility
 
 from wait_for_goal import WaitForGoal
 import threading
 import time
 import functools
 
-@smach.cb_interface(input_keys=['target_pose'])
+
+
+@smach.cb_interface(input_keys=['target_pose', 'start_pose'])
 def get_path_goal_cb(userdata, goal):
-    goal.use_start_pose = False
+    print ("in get path")
+    goal.use_start_pose = True
     goal.tolerance = 0.2
+
+    position, quaternion = Utility.get_robot_pose()
+    # print "start:", position, quaternion
+
     goal.target_pose = userdata.target_pose
+
+    goal.start_pose = PoseStamped()
+    goal.start_pose.header = goal.target_pose.header
+    goal.start_pose.pose.position.x = position[0]
+    goal.start_pose.pose.position.y = position[1]
+    goal.start_pose.pose.orientation.z = quaternion[2]
+    goal.start_pose.pose.orientation.w = quaternion[3]
+
     goal.planner = 'planner'
+    print "goal is: ", goal
 
 
 @smach.cb_interface(
@@ -87,6 +106,7 @@ class ExecPath(smach.State):
                              input_keys=['start_pose', 'waypoints', 'tolerance', 'use_start_pose', 'path'],
                              output_keys=['start_pose', 'target_pose', 'waypoints', 'tolerance', 'use_start_pose', 'outcome', 'message', 'final_pose', 'dist_to_goal'])
         self.global_target_pose = PoseStamped()
+
         self.subscriber = None
         self.flag = None
         self.outcome = None
