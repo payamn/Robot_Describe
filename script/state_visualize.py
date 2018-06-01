@@ -29,7 +29,7 @@ def get_path_goal_cb(userdata, goal):
     goal.use_start_pose = True
     goal.tolerance = 0.2
 
-    position, quaternion = Utility.get_robot_pose()
+    position, quaternion = Utility.get_robot_pose("/map_server")
     # print "start:", position, quaternion
 
     goal.target_pose = userdata.target_pose

@@ -89,7 +89,7 @@ class GenerateMap:
         print('one Point for %s saved' % self.points_description[-1][2])
 
     def get_local_map(self):
-        image = sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
+        image = Utility.sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
                           self.max_distace * 4, self.max_distace * 4)
         cv2.imshow("local", image)
         cv2.waitKey(1)
@@ -180,45 +180,10 @@ class GenerateMap:
     def call_back_map(self, data):
         print (len(data.data))
         map_array = np.array(data.data).reshape((data.info.height, data.info.width))
-        map_array = normalize(map_array)
+        map_array = Utility.normalize(map_array)
         self.map = map_array, data.info.resolution
 
 
-def normalize(data):
-    data -= data.min()
-    data /= (data.max() - data.min())
-    data *= 255
-    data = data.astype(np.uint8)
-    return data
-
-def sub_image(image, resolution, center, theta, width, height):
-    '''
-    Rotates OpenCV image around center with angle theta (in deg)
-    then crops the image according to width and height.
-    '''
-    width = int(width / resolution)
-    height = int(height / resolution)
-    center = (center[0]/resolution+height, center[1]/resolution+width)
-
-    # Uncomment for theta in radians
-    # theta *= 180/np.pi
-
-    image = cv2.copyMakeBorder(image, top=height, bottom=height, left=width, right=width,
-                               borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
-    shape = image.shape[:2]
-
-    matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
-    image = cv2.warpAffine(image, matrix, (shape[1],shape[0]))
-
-
-    x = int(center[0] - width / 2)
-    y = int(center[1] - height / 2)
-
-    cv2.imshow("map1", image)
-    cv2.waitKey(1)
-    image = image[y:y + height, x:x + width]
-
-    return image
 
 def degree_to_object(degree_object, degree_robot):
     degree_diff = (degree_robot - degree_object) * math.pi / 180

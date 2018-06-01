@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import rospy
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 
 from move_base_msgs.msg import MoveBaseActionGoal
@@ -15,7 +15,12 @@ from tf import TransformListener
 import numpy as np
 import threading
 import rospkg
+
+import cv2
+
 import os
+import subprocess
+
 from utility import Utility
 import pickle
 import math
@@ -29,8 +34,11 @@ is_write = False
 tf_listner = TransformListener()
 MIN_DISTANCE_TO_PUBLISH = 5
 MAX_DISTANCE_TO_PUBLISH = 7
+LOCAL_DISTANCE = 4
+
 idx = 0
 counter = 0
+map = None
 positions = []
 reset_pos_robot = rospy.ServiceProxy('/reset_position_robot_0', reset_position)
 
@@ -77,43 +85,95 @@ def write_to_pickle():
     rospy.spin()
 def read_from_pickle(pickle_dir):
     rospy.init_node('Path_follower')
+    rospy.Subscriber("/gmap", OccupancyGrid, call_back_map)
 
     files = [f for f in os.listdir(pickle_dir) if os.path.isfile(os.path.join(pickle_dir, f))]
     files = sorted(files, key=lambda file: int(file.split('.')[0]))
     files = [os.path.join(pickle_dir, f) for f in files]
 
-    moved = False
     publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
-
+    coordinates = []
     for file in files:
         with open(file, "rb") as p:
             data = pickle.load(p)
-            for coordinate in data:
-                if not moved:
-                    move_robot_to_pose(coordinate)
-                    moved = True
-                    continue
-                position, quaternion = Utility.get_robot_pose()
+            coordinates = coordinates + data
 
-                if Utility.distance_vector(position[:2], coordinate[:2]) < MIN_DISTANCE_TO_PUBLISH:
-                    continue
+    random.seed(a=None)
+    index = random.randint(0, len(coordinates)-1)
+    index += 1
+    move_robot_to_pose(coordinates[index])
+    print "start index: ", index, " len: ", len(coordinates)
+    time.sleep(0.1)
+    counter = 10
+    while (index < len(coordinates)):
+        counter -= 1
+        if counter <= 0:
+            counter = 10
+            reset_gmapping()
+        position, quaternion = Utility.get_robot_pose("/map_server")
 
-                while Utility.distance_vector(position[:2], coordinate[:2]) > MAX_DISTANCE_TO_PUBLISH:
-                    time.sleep(0.3)
-                    position, quaternion = Utility.get_robot_pose()
+        if Utility.distance_vector(position[:2], coordinates[index][:2]) < MIN_DISTANCE_TO_PUBLISH:
+            index += 1
+            continue
 
-                target_goal_simple = PoseStamped()
-                target_goal_simple.pose.position.x = coordinate[0]
-                target_goal_simple.pose.position.y = coordinate[1]
-                target_goal_simple.pose.position.z = 0
-                target_goal_simple.pose.orientation.w = 1
-                target_goal_simple.header.frame_id = 'map_server'
-                target_goal_simple.header.stamp = rospy.Time.now()
-                publisher.publish(target_goal_simple)
-                print coordinate
 
+        while Utility.distance_vector(position[:2], coordinates[index][:2]) > MAX_DISTANCE_TO_PUBLISH:
+            time.sleep(0.3)
+            position, quaternion = Utility.get_robot_pose("/map_server")
+            # print ("distance greater waiting")
+
+        target_goal_simple = PoseStamped()
+        target_goal_simple.pose.position.x = coordinates[index][0]
+        target_goal_simple.pose.position.y = coordinates[index][1]
+        target_goal_simple.pose.position.z = 0
+        target_goal_simple.pose.orientation.w = 1
+        target_goal_simple.header.frame_id = 'map_server'
+        target_goal_simple.header.stamp = rospy.Time.now()
+        publisher.publish(target_goal_simple)
+        index += 1
+
+    print "finish execution"
     rospy.spin()
 
+def reset_gmapping():
+    p = subprocess.Popen("rosnode kill /slam_gmapping", stdout=None, shell=True)
+    (output, err) = p.communicate()
+    p.wait()
+    p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
+    time.sleep(0.5)
+    print ("gmapping reset")
+
+
+def call_back_map(data):
+    global map
+    print (len(data.data))
+    map_array = np.array(data.data).reshape((data.info.height, data.info.width))
+    map_array = normalize(map_array)
+    map = map_array, data.info.resolution
+    get_local_map()
+    return 0
+
+
+def get_local_map():
+    global map
+    if map == None:
+        return
+    # get robot pose in gmapping
+    position, quaternion = Utility.get_robot_pose("/map")
+    _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
+                                                quaternion[2], quaternion[3])
+    image = Utility.sub_image(map[0], map[1], (position[0], position[1]), z,
+                      LOCAL_DISTANCE * 4, LOCAL_DISTANCE * 4)
+    cv2.imshow("local", image)
+    cv2.waitKey(1)
+    return image
+
+def normalize(data):
+    data -= data.min()
+    data /= (data.max() - data.min())
+    data *= 255
+    data = data.astype(np.uint8)
+    return data
 
 if __name__ == '__main__':
     pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
