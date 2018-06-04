@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import rospy
 from nav_msgs.msg import Odometry, OccupancyGrid
+from nav_msgs.srv import GetMap
 from geometry_msgs.msg import PoseStamped
 
 from move_base_msgs.msg import MoveBaseActionGoal
@@ -11,7 +12,7 @@ from stage_ros.srv import reset_position
 from std_msgs.msg import String
 import random
 from geometry_msgs.msg import Pose
-from tf import TransformListener
+from tf import TransformListener, transformations
 import numpy as np
 import threading
 import rospkg
@@ -38,7 +39,7 @@ LOCAL_DISTANCE = 4
 
 idx = 0
 counter = 0
-map = None
+map = {}
 positions = []
 reset_pos_robot = rospy.ServiceProxy('/reset_position_robot_0', reset_position)
 
@@ -83,9 +84,32 @@ def write_to_pickle():
     rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, callback_robot_0)
 
     rospy.spin()
+
+
+# rospy.wait_for_service('/dynamic_map')
+def call_back_laser_read(odom_data):
+    get_map()
+
+
+def get_map():
+    global  map
+    try:
+        gmap_service = rospy.ServiceProxy('/dynamic_map', GetMap)
+        gmap = gmap_service()
+
+        map_array = np.array(gmap.map.data).reshape((gmap.map.info.height, gmap.map.info.width))
+        map_array = normalize(map_array)
+        map["data"] = map_array
+        map["info"] = gmap.map.info
+        get_local_map()
+        return map
+    except rospy.ServiceException, e:
+        print "Service call failed: %s" % e
+
+
 def read_from_pickle(pickle_dir):
     rospy.init_node('Path_follower')
-    rospy.Subscriber("/gmap", OccupancyGrid, call_back_map)
+    rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, call_back_laser_read)
 
     files = [f for f in os.listdir(pickle_dir) if os.path.isfile(os.path.join(pickle_dir, f))]
     files = sorted(files, key=lambda file: int(file.split('.')[0]))
@@ -107,6 +131,7 @@ def read_from_pickle(pickle_dir):
     counter = 10
     while (index < len(coordinates)):
         counter -= 1
+
         if counter <= 0:
             counter = 10
             reset_gmapping()
@@ -143,6 +168,7 @@ def reset_gmapping():
     time.sleep(0.5)
     print ("gmapping reset")
 
+reset_gmapping()
 
 def call_back_map(data):
     global map
@@ -156,14 +182,21 @@ def call_back_map(data):
 
 def get_local_map():
     global map
-    if map == None:
+    if len(map) == 0:
         return
     # get robot pose in gmapping
     position, quaternion = Utility.get_robot_pose("/map")
+    plus_x = map["info"].origin.position.y * map["info"].resolution
+    plus_y = map["info"].origin.position.x * map["info"].resolution
+    position[0] -= map["info"].origin.position.x #* map["info"].resolution
+    position[1] -= map["info"].origin.position.y #* map["info"].resolution
     _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
                                                 quaternion[2], quaternion[3])
-    image = Utility.sub_image(map[0], map[1], (position[0], position[1]), z,
-                      LOCAL_DISTANCE * 4, LOCAL_DISTANCE * 4)
+
+
+    image = Utility.sub_image(map["data"], map["info"].resolution, (position[0]  , position[1]), z,
+                      LOCAL_DISTANCE * 4, LOCAL_DISTANCE * 4, only_forward=True)
+
     cv2.imshow("local", image)
     cv2.waitKey(1)
     return image

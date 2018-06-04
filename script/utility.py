@@ -23,13 +23,13 @@ class Utility:
         return data
 
     @staticmethod
-    def sub_image(image, resolution, center, theta, width, height):
+    def sub_image(image, resolution, center, theta, width, height, only_forward=False):
         '''
         Rotates OpenCV image around center with angle theta (in deg)
         then crops the image according to width and height.
         '''
-        width = int(width / resolution)
-        height = int(height / resolution)
+        width = int(np.ceil(width / resolution))
+        height = int(np.ceil(height / resolution))
         center = (center[0] / resolution + height, center[1] / resolution + width)
 
         # Uncomment for theta in radians
@@ -42,11 +42,12 @@ class Utility:
         matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
         image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
 
-        x = int(center[0] - width / 2)
-        y = int(center[1] - height / 2)
-
         cv2.imshow("map1", image)
         cv2.waitKey(1)
+
+        x = int(np.ceil(center[0] - width / 2)) if not only_forward else int(np.ceil(center[0] - width / 9))
+        y = int(np.ceil(center[1] - height / 2))
+
         image = image[y:y + height, x:x + width]
 
         return image
@@ -98,7 +99,7 @@ class Utility:
         return False
 
     @staticmethod
-    def quaternion_to_euler_angle(w, x, y, z):
+    def quaternion_to_euler_angle(x, y, z, w):
         ysqr = y * y
 
         t0 = +2.0 * (w * x + y * z)
