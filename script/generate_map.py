@@ -8,6 +8,8 @@ from move_base_msgs.msg import MoveBaseActionGoal
 from sensor_msgs.msg import LaserScan
 import cv2
 
+from generate_path import GeneratePath
+
 from std_msgs.msg import String
 import random
 import tf
@@ -48,6 +50,8 @@ class GenerateMap:
         self.stop = True
         self.skip_couter = 2
         self.skip_len = 2
+        self.generate_path = \
+            ()
 
     def save_pickle(self):
         lasers = []
