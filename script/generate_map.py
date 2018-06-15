@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import rospy
 from nav_msgs.msg import Odometry, OccupancyGrid
+from nav_msgs.srv import GetMap
+
 from geometry_msgs.msg import PoseStamped
 
 from move_base_msgs.msg import MoveBaseActionGoal
@@ -10,12 +12,19 @@ import cv2
 
 from generate_path import GeneratePath
 
+from geometry_msgs.msg import Pose
+
+from stage_ros.srv import reset_position
+
 from std_msgs.msg import String
 import random
 import tf
 from tf import TransformListener
 import numpy as np
+
 import threading
+import subprocess
+
 import rospkg
 from utility import *
 import pickle
@@ -38,7 +47,7 @@ class GenerateMap:
         self.max_distace = 3
         self.pose = (10, 10, 0)
         self.robot_orientation_degree = (0,0,0)
-        self.map = None
+        self.map = {}
         self.language = None
         self.data_pointer = 0
         self.laser_list = []
@@ -50,8 +59,86 @@ class GenerateMap:
         self.stop = True
         self.skip_couter = 2
         self.skip_len = 2
-        self.generate_path = \
-            ()
+        self.counter = 0
+        self.local_map = None
+        self.generate_path = ()
+        self.reset_pos_robot = rospy.ServiceProxy('/reset_position_robot_0', reset_position)
+        self.publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
+
+        self.MIN_DISTANCE_TO_PUBLISH = 5
+        self.MAX_DISTANCE_TO_PUBLISH = 7
+        self.LOCAL_DISTANCE = 5.6
+
+
+        pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
+        generate_path = GeneratePath(pickle_dir)
+        self.coordinates = generate_path.get_coordinates()
+        self.reset_gmapping()
+
+    def get_map(self):
+        rospy.wait_for_service('/dynamic_map')
+        try:
+            gmap_service = rospy.ServiceProxy('/dynamic_map', GetMap)
+            start_time = time.time()
+            gmap = gmap_service()
+            print("get map --- %s seconds ---" % (time.time() - start_time))
+            map_array = np.array(gmap.map.data).reshape((gmap.map.info.height, gmap.map.info.width))
+            map_array = Utility.normalize(map_array)
+            self.map["data"] = map_array
+            self.map["info"] = gmap.map.info
+        except rospy.ServiceException, e:
+            print "Service call failed: %s" % e
+
+    def reset_gmapping(self):
+        p = subprocess.Popen("rosnode kill /cost_map_node", stdout=None, shell=True)
+        (output, err) = p.communicate()
+        p.wait()
+        p = subprocess.Popen("rosnode kill /slam_gmapping", stdout=None, shell=True)
+        (output, err) = p.communicate()
+        p.wait()
+        time.sleep(0.5)
+        p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
+        time.sleep(0.5)
+        print ("gmapping reset")
+
+    def move_robot_to_pose(self, coordinate):
+        pose = Pose()
+
+        pose.position.x = coordinate[0] - 30.15
+        pose.position.y = coordinate[1] - 26.5
+        pose.position.z = 0
+        pose.orientation.w = coordinate[2]
+
+        self.reset_pos_robot(pose)
+
+    def get_local_map(self):
+        time.sleep(5)
+        while True:
+            self.get_map()
+
+            if len(self.map) == 0:
+                print "no map"
+                return
+            # get robot pose in gmapping
+            position, quaternion = Utility.get_robot_pose("/map")
+            plus_x = self.map["info"].origin.position.y * self.map["info"].resolution
+            plus_y = self.map["info"].origin.position.x * self.map["info"].resolution
+            position[0] -= self.map["info"].origin.position.x #* self.map["info"].resolution
+            position[1] -= self.map["info"].origin.position.y #* self.map["info"].resolution
+            _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
+                                                        quaternion[2], quaternion[3])
+
+
+            image = Utility.sub_image(self.map["data"], self.map["info"].resolution, (position[0]  , position[1]), z,
+                              self.LOCAL_DISTANCE, self.LOCAL_DISTANCE, only_forward=True)
+
+            cv2.namedWindow('local', cv2.WINDOW_NORMAL)
+
+            cv2.imshow("local", image)
+            cv2.waitKey(1)
+
+            self.local_map = image
+
 
     def save_pickle(self):
         lasers = []
@@ -64,7 +151,7 @@ class GenerateMap:
         print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
         data = {"laser_scans":lasers, "speeds":speeds, "local_maps":local_maps, "language":self.language}
         pickle.dump(data,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     def add_data(self, laser, local_map): # add a data to local_map list
@@ -86,30 +173,30 @@ class GenerateMap:
                 self.skip_couter = self.skip_len
 
     def callback_point(self, data):
-        _, _, z = Utility.quaternion_to_euler_angle(data.pose.orientation.w, data.pose.orientation.x,
-                                                    data.pose.orientation.y, data.pose.orientation.z)
+        _, _, z = Utility.quaternion_to_euler_angle(data.pose.orientation.x, data.pose.orientation.y,
+                                                    data.pose.orientation.z, data.pose.orientation.w,)
         point = [data.pose.position, z, self.sentences[self.sentences_index]]
         self.points_description.append(point)
         print('one Point for %s saved' % self.points_description[-1][2])
 
-    def get_local_map(self):
-        image = Utility.sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
-                          self.max_distace * 4, self.max_distace * 4)
-        cv2.imshow("local", image)
-        cv2.waitKey(1)
-        return image
+    # def get_local_map(self):
+    #     image = Utility.sub_image(self.map[0], self.map[1], (self.pose[0], self.pose[1]), self.robot_orientation_degree[2],
+    #                       self.max_distace * 4, self.max_distace * 4)
+    #     cv2.imshow("local", image)
+    #     cv2.waitKey(1)
+    #     return image
 
     def callback_laser_scan(self, scan):
-        if self.map is None or self.current_speed is None or self.language is None:
+        # local_map = self.get_local_map()
+        if self.local_map is None or self.current_speed is None or self.language is None:
             return
-        local_map = self.get_local_map()
         laser_data = [float(x) / scan.range_max for x in scan.ranges]
-        self.add_data(laser_data, local_map)
+        self.add_data(laser_data, self.local_map)
 
     def callback_robot_0(self, odom_data):
 
-        t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map")
-        position, quaternion = self.tf_listner.lookupTransform("/map", "/robot_0/base_link", t)
+        t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map_server")
+        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/robot_0/base_link", t)
         if (
                 odom_data.twist.twist.linear.x == 0 and
                 odom_data.twist.twist.linear.y == 0 and
@@ -123,12 +210,18 @@ class GenerateMap:
                 (odom_data.twist.twist.linear.x, odom_data.twist.twist.linear.y, odom_data.twist.twist.angular.z)
 
         self.pose = position
-        self.robot_orientation_degree = Utility.quaternion_to_euler_angle(odom_data.pose.pose.orientation.w,
+        self.robot_orientation_degree = Utility.quaternion_to_euler_angle(
                                                                      odom_data.pose.pose.orientation.x,
                                                                      odom_data.pose.pose.orientation.y,
-                                                                     odom_data.pose.pose.orientation.z)
+                                                                     odom_data.pose.pose.orientation.z,
+                                                                     odom_data.pose.pose.orientation.w)
+        pose_robot_start_of_image = [
+            self.pose[0] + math.cos(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
+            self.pose[1] + math.sin(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
+            ]
 
-        return_nodes = closest_node(np.asarray([self.pose[0], self.pose[1]]), self.points_description, self.robot_orientation_degree, self.max_distace
+
+        return_nodes = closest_node(np.asarray([pose_robot_start_of_image[0], pose_robot_start_of_image[1]]), self.points_description, self.robot_orientation_degree, self.LOCAL_DISTANCE / 2.0
                                   , self.tf_listner)
         for index, nodes in enumerate(return_nodes):
             happend_recently = False
@@ -150,10 +243,9 @@ class GenerateMap:
         description_degree = [[i[1], i[2]] for i in self.points_description]
         # for points in description_degree:
         self.points_description = [position_points, description_degree]
-        print description_degree
+        # print description_degree
         rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.callback_robot_0)
         rospy.Subscriber("/robot_0/base_scan_1", LaserScan, self.callback_laser_scan)
-        rospy.Subscriber("/map", OccupancyGrid, self.call_back_map)
         rospy.spin()
 
     def append_to_pickle(self):
@@ -179,13 +271,51 @@ class GenerateMap:
         pickle.dump(self.points_description,
                     open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "wb"))
 
+    def point_generator(self):
+        while True:
+            self.reset_gmapping()
+            random.seed(a=None)
+            index = random.randint(0, len(self.coordinates)-1)
+            index += 1
+            self.move_robot_to_pose(self.coordinates[index])
+            print "start index: ", index, " len: ", len(self.coordinates)
+            time.sleep(0.1)
+            counter = 30
+            while (index < len(self.coordinates)):
+                # counter -= 1
+                #
+                # if counter <= 0:
+                #     counter = 30
+                #     self.reset_gmapping()
+                position, quaternion = Utility.get_robot_pose("/map_server")
+
+                if Utility.distance_vector(position[:2], self.coordinates[index][:2]) < self.MIN_DISTANCE_TO_PUBLISH:
+                    index += 1
+                    continue
 
 
-    def call_back_map(self, data):
-        print (len(data.data))
-        map_array = np.array(data.data).reshape((data.info.height, data.info.width))
-        map_array = Utility.normalize(map_array)
-        self.map = map_array, data.info.resolution
+                while Utility.distance_vector(position[:2], self.coordinates[index][:2]) > self.MAX_DISTANCE_TO_PUBLISH:
+                    time.sleep(0.3)
+                    position, quaternion = Utility.get_robot_pose("/map_server")
+                    # print ("distance greater waiting")
+
+                target_goal_simple = PoseStamped()
+                target_goal_simple.pose.position.x = self.coordinates[index][0]
+                target_goal_simple.pose.position.y = self.coordinates[index][1]
+                target_goal_simple.pose.position.z = 0
+                target_goal_simple.pose.orientation.w = 1
+                target_goal_simple.header.frame_id = 'map_server'
+                target_goal_simple.header.stamp = rospy.Time.now()
+                self.publisher.publish(target_goal_simple)
+                index += 1
+
+        print "finish execution"
+
+    # def call_back_map(self, data):
+    #     print (len(data.data))
+    #     map_array = np.array(data.data).reshape((data.info.height, data.info.width))
+    #     map_array = Utility.normalize(map_array)
+    #     self.map = map_array, data.info.resolution
 
 
 
@@ -228,7 +358,7 @@ lang_dic = {"room":room, "t_junction":t_junction, "corner":corner}
 
 def make_pose_stamped(pose, degree):
     out = PoseStamped()
-    out.header.frame_id = "/map"
+    out.header.frame_id = "/map_server"
     out.header.stamp = rospy.Time(0)
     out.pose.position.z = 0
     out.pose.position.x = pose[0]
@@ -267,5 +397,9 @@ if __name__ == '__main__':
     if args.generate_point:
         generate_map.write_to_pickle()
     else:
+        # threading.Thread(target=generate_map.get_local_map).start()
+        threading.Thread(target=generate_map.point_generator).start()
         generate_map.read_from_pickle()
+
+
 

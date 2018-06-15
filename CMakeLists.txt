@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(robot_describe)
 
 ## Add support for C++11, supported in ROS Kinetic and newer
-# add_definitions(-std=c++11)
+add_definitions(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -24,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
   move_base
   move_base_msgs
   people_msgs
+  costmap_2d
 )
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system thread)
@@ -118,7 +119,7 @@ catkin_python_setup()
 catkin_package(
  # INCLUDE_DIRS include
 #  LIBRARIES person_follower
- CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy sensor_msgs std_msgs message_runtime message_filters tf
+ CATKIN_DEPENDS geometry_msgs costmap_2d nav_msgs roscpp rospy sensor_msgs std_msgs message_runtime message_filters tf
 #  DEPENDS system_lib
 )
 
@@ -132,7 +133,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++11")
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-	# include
+	include
 	${catkin_INCLUDE_DIRS}
 	${OpenCV_INCLUDE_DIRS}
 	${Boost_INCLUDE_DIRS}
@@ -140,6 +141,9 @@ include_directories(
 )
 
 ## Declare a C++ library
+add_library(${PROJECT_NAME}
+	src/cost_map.cpp
+	)
 # add_library(${PROJECT_NAME}
 #   src/pid.cpp
 #   src/filter.cpp
@@ -174,18 +178,26 @@ include_directories(
 ## target back to the shorter version for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
+add_executable(cost_map_node src/cost_map.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(robot_describe_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(cost_map_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(robot_describe_node
-#   ${catkin_LIBRARIES}
-#   #${OpenCV_LIBRARIES}
-#   ${OPENCV_LIB}
-#   ${PROJECT_NAME}
-# )
+target_link_libraries(${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  ${OPENCV_LIB}
+)
+
+target_link_libraries(cost_map_node
+  ${catkin_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  ${OPENCV_LIB}
+  ${PROJECT_NAME}
+)
 
 #############
 ## Install ##

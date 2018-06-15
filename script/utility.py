@@ -38,12 +38,14 @@ class Utility:
         image = cv2.copyMakeBorder(image, top=height, bottom=height, left=width, right=width,
                                    borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
         shape = image.shape[:2]
-
+        cv2.namedWindow('map1', cv2.WINDOW_NORMAL)
+        cv2.imshow("map1", image)
+        cv2.waitKey(1)
         matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
         image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
 
-        cv2.imshow("map1", image)
-        cv2.waitKey(1)
+        # cv2.imshow("map1", image)
+        # cv2.waitKey(1)
 
         x = int(np.ceil(center[0] - width / 2)) if not only_forward else int(np.ceil(center[0] - width / 9))
         y = int(np.ceil(center[1] - height / 2))
