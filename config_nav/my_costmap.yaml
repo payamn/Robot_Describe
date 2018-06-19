@@ -4,6 +4,6 @@ my_costmap:
   rolling_window: false
   robot_base_frame: "/robot_0/base_link"
   map_topic: "gmap"
-  publish_frequency: 1
+  publish_frequency: 20
   obstacles:
     observation_sources: robot_0/base_scan_1

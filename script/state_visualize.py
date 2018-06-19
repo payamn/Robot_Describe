@@ -25,7 +25,7 @@ import functools
 
 @smach.cb_interface(input_keys=['target_pose', 'start_pose'])
 def get_path_goal_cb(userdata, goal):
-    print ("in get path")
+    # print ("in get path")
     goal.use_start_pose = True
     goal.tolerance = 0.2
 
@@ -42,7 +42,7 @@ def get_path_goal_cb(userdata, goal):
     goal.start_pose.pose.orientation.w = quaternion[3]
 
     goal.planner = 'planner'
-    print "goal is: ", goal
+    # print "goal is: ", goal
 
 
 @smach.cb_interface(
@@ -133,7 +133,7 @@ class ExecPath(smach.State):
         self.flag = None
         rate = 0.3
 
-        print(userdata)
+        # print(userdata)
 
         action_thread = threading.Thread(target=smach_ros.SimpleActionState.execute, args=(self.simple_action_state, userdata,))
         action_thread.start()
@@ -141,7 +141,7 @@ class ExecPath(smach.State):
 
         while not rospy.is_shutdown():
             flag = self.get_flag()
-            print ("flag is :" + str(flag))
+            # print ("flag is :" + str(flag))
             if (flag is None or flag == 'ex_path_goal_cb') and not rospy.is_shutdown():
                 time.sleep(rate)
                 continue
@@ -152,8 +152,8 @@ class ExecPath(smach.State):
         if flag == 'goal_callback':
             # TODO: cancel the previous goal
             userdata.target_pose = self.global_target_pose
-            print "Target Pose:", self.global_target_pose.pose.position.x, self.global_target_pose.pose.position.y,\
-                  self.global_target_pose.pose.position.z
+            # print "Target Pose:", self.global_target_pose.pose.position.x, self.global_target_pose.pose.position.y,\
+            #       self.global_target_pose.pose.position.z
             if rospy.is_shutdown():
               transition = 'preempted'
 
@@ -171,7 +171,7 @@ class ExecPath(smach.State):
         return transition
 
     def goal_callback(self, msg):
-        rospy.logerr("Received goal:")
+        # rospy.logerr("Received goal:")
         self.global_target_pose = msg
         flag = self.get_flag()
         if True: # flag is None or flag=='ex_path_goal_cb':
@@ -198,7 +198,7 @@ class ExecPath(smach.State):
             self.outcome = 'succeeded'
         else:
             self.outcome = 'failure'
-        print(self.outcome)
+        # print(self.outcome)
 
         flag = self.get_flag()
         if flag != 'goal_callback':

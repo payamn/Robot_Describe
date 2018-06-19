@@ -34,16 +34,21 @@ class Utility:
 
         # Uncomment for theta in radians
         # theta *= 180/np.pi
-
         image = cv2.copyMakeBorder(image, top=height, bottom=height, left=width, right=width,
                                    borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        shape = image.shape[:2]
-        cv2.namedWindow('map1', cv2.WINDOW_NORMAL)
-        cv2.imshow("map1", image)
-        cv2.waitKey(1)
-        matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
-        image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
 
+        shape = image.shape[:2]
+
+        print "after copymakeborder", shape
+        # cv2.namedWindow('map1', cv2.WINDOW_NORMAL)
+        print "before imshow"
+        # cv2.imshow("map1", image)
+        # cv2.waitKey(1)
+        print "before matrix"
+        matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
+        print "before warpaffine", shape[1], shape[0]
+        image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
+        print "after warpaffine"
         # cv2.imshow("map1", image)
         # cv2.waitKey(1)
 
