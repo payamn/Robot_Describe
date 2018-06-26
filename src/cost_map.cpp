@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 		cv_img_prev = cv_img.clone();
 
 		auto time = boost::chrono::duration_cast<boost::chrono::milliseconds>(boost::chrono::high_resolution_clock::now()-t1);
-			ROS_INFO("execution time %d",time);
+//			ROS_INFO("execution time %d",time);
 	};
 	ros::Timer timer = n.createTimer(ros::Duration(0.01), timerCallback);
 

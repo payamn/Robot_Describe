@@ -9,7 +9,7 @@
 define p2dxsonar sensor
 (
   # define the size of each transducer [xsize ysize zsize] in meters
-  size [0.01 0.05 0.01 ] 
+  size [0.01 0.05 0.01 ]
   # define the range bounds [min max]
   range [0 5.0]
   # define the angular field of view in degrees

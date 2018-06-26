@@ -66,7 +66,7 @@ def callback_robot_0(odom_data, my_robot):
     # if not tf_listner.frameExists("map"):
     #     print "map dont exits"
     # if tf_listner.frameExists("/robot_0/base_link") and tf_listner.frameExists("/map"):
-    t = tf_listner.getLatestCommonTime("/robot_0/base_link", "/map")
+    t = tf_listner.getLatestCommonTime("/base_link", "/map")
     position, quaternion = tf_listner.lookupTransform("/map", "/robot_0/base_link", t)
     # print position
 
@@ -155,8 +155,8 @@ def read_from_pickle():
     points_description = [position_points, description_degree]
     print description_degree
     robot = Robot(True, 2, start_index_dataset=1140, use_direction_file=False, bag_name="/bag_train/")
-    rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, callback_robot_0, robot)
-    rospy.Subscriber("/robot_0/base_scan_1", LaserScan, callback_laser_scan, robot)
+    rospy.Subscriber("/base_pose_ground_truth", Odometry, callback_robot_0, robot)
+    rospy.Subscriber("/base_scan", LaserScan, callback_laser_scan, robot)
     rospy.spin()
 
 

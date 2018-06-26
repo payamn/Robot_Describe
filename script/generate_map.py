@@ -10,6 +10,7 @@ from move_base_msgs.msg import MoveBaseActionGoal
 from sensor_msgs.msg import LaserScan, Image
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image
 
 from generate_path import GeneratePath
 
@@ -52,11 +53,14 @@ class GenerateMap:
         self.map = {}
         self.language = None
         self.data_pointer = 0
+        self.image_pub = rospy.Publisher("local_map", Image, queue_size=1)
+        self.laser_data = None
         self.laser_list = []
         self.speed_list = []
         self.local_map_list = []
         self.current_speed = None
         self.len_to_save = 20
+        self.is_turning = 0
         self.pickle_counter = start_pickle
         self.stop = True
         self.skip_couter = 2
@@ -76,21 +80,23 @@ class GenerateMap:
         pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
         generate_path = GeneratePath(pickle_dir)
         self.coordinates = generate_path.get_coordinates()
+        # self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
+
         # self.reset_gmapping()
         # self.get_map_info()
-        self.is_init = True
+
     def get_map_info(self):
         if not self.is_init:
             return
-        print "in get_get info"
+        # print "in get_get info"
         rospy.wait_for_service('/cost_map_node/map_info')
         try:
             map_info_service = rospy.ServiceProxy('/cost_map_node/map_info', GetMap)
             start_time = time.time()
             map_info = map_info_service()
-            print("get map --- %s seconds ---" % (time.time() - start_time))
+            # print("get map --- %s seconds ---" % (time.time() - start_time))
             self.map["info"] = map_info.map.info
-            print "map_info set"
+            # print "map_info set"
         except rospy.ServiceException, e:
             print "Service call failed: %s" % e
 
@@ -100,7 +106,7 @@ class GenerateMap:
             gmap_service = rospy.ServiceProxy('/dynamic_map', GetMap)
             start_time = time.time()
             gmap = gmap_service()
-            print("get map --- %s seconds ---" % (time.time() - start_time))
+            # print("get map --- %s seconds ---" % (time.time() - start_time))
             map_array = np.array(gmap.map.data).reshape((gmap.map.info.height, gmap.map.info.width))
             map_array = Utility.normalize(map_array)
             self.map["data"] = map_array
@@ -111,10 +117,21 @@ class GenerateMap:
     # def reset_gmapping(self):
 
 
+    import math
 
-    def move_robot_to_pose_reset_gmap(self, coordinate):
+    def move_robot_to_pose_reset_gmap(self, coordinate, coordinate_next):
         self.is_init = False
-        time.sleep(1)
+        pose = Pose()
+
+        angle = math.atan2(coordinate_next[1] - coordinate[1], coordinate_next[0] - coordinate[0])
+
+        pose.position.x = coordinate[0] - 30.15
+        pose.position.y = coordinate[1] - 26.5
+        pose.position.z = 0
+        pose.orientation.w = angle
+
+        self.reset_pos_robot(pose)
+        # time.sleep(1)
         # cv2.destroyAllWindows()
         if self.img_sub:
             self.img_sub.unregister()
@@ -125,19 +142,16 @@ class GenerateMap:
         (output, err) = p.communicate()
         p.wait()
         time.sleep(0.5)
+        # print "angle", angle*180.0/math.pi
 
-        pose = Pose()
-
-        pose.position.x = coordinate[0] - 30.15
-        pose.position.y = coordinate[1] - 26.5
-        pose.position.z = 0
-        pose.orientation.w = coordinate[2]
-
-        self.reset_pos_robot(pose)
+        self.laser_data = None
         self.laser_list = []
         self.speed_list = []
         self.local_map_list = []
         self.local_map = None
+        self.current_speed = None
+        self.prev_points = [([0, 0],0 )for x in range(10)]
+
         time.sleep(0.5)
 
         p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
@@ -146,6 +160,9 @@ class GenerateMap:
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
         print ("gmapping reset")
+        time.sleep(0.5)
+
+        self.is_init = True
 
     def get_local_map(self):
         self.get_map_info()
@@ -154,9 +171,7 @@ class GenerateMap:
             print "no map or not init"
             return
         # get robot pose in gmapping
-        print ("before get robot pose")
         position, quaternion = Utility.get_robot_pose("/map")
-        print ("after get robot pose")
         plus_x = self.map["info"].origin.position.y * self.map["info"].resolution
         plus_y = self.map["info"].origin.position.x * self.map["info"].resolution
         position[0] -= self.map["info"].origin.position.x #* self.map["info"].resolution
@@ -165,12 +180,17 @@ class GenerateMap:
         _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
                                                     quaternion[2], quaternion[3])
 
-        print ("before get sub_image pose" , self.is_init)
 
         image = Utility.sub_image(self.map["data"], self.map["info"].resolution, (position[0]  , position[1]), z,
                           self.LOCAL_DISTANCE, self.LOCAL_DISTANCE, only_forward=True)
-        print ("after get sub_image pose")
 
+        # msg = Image()
+        # msg.header.stamp = rospy.Time.now()
+        # msg.format = "jpeg"
+        # msg.data =
+        # # Publish new image
+        self.image_pub.publish(self.bridge.cv2_to_imgmsg(image))
+        print "published msg"
         # cv2.namedWindow('local', cv2.WINDOW_NORMAL)
 
         # cv2.imshow("local", image)
@@ -180,38 +200,40 @@ class GenerateMap:
 
 
     def save_pickle(self):
-        if not self.is_init:
+        if not self.is_init or self.laser_data is None or self.local_map is None \
+                or self.language is None or self.current_speed is None:
             return
-        lasers = []
-        speeds = []
-        local_maps = []
-        for index in range(self.len_to_save):
-            lasers = self.laser_list[self.data_pointer:] + self.laser_list[0:self.data_pointer]
-            speeds = self.speed_list[self.data_pointer:] + self.speed_list[0:self.data_pointer]
-            local_maps = self.local_map_list[self.data_pointer:] + self.local_map_list[0:self.data_pointer]
+        # lasers = []
+        # speeds = []
+        # local_maps = []
+        # for index in range(self.len_to_save):
+        #     lasers = self.laser_list[self.data_pointer:] + self.laser_list[0:self.data_pointer]
+        #     speeds = self.speed_list[self.data_pointer:] + self.speed_list[0:self.data_pointer]
+        #     local_maps = self.local_map_list[self.data_pointer:] + self.local_map_list[0:self.data_pointer]
         print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
-        data = {"laser_scans":lasers, "speeds":speeds, "local_maps":local_maps, "language":self.language}
+        data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language}
         # pickle.dump(data,
         #             open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
-    def add_data(self, laser): # add a data to local_map list
-        if self.stop:
-            return
-
-        if len(self.speed_list) != self.len_to_save:
-            self.speed_list.append(self.current_speed)
-            self.laser_list.append(laser)
-            self.local_map_list.append(self.local_map)
-        else:
-            self.speed_list[self.data_pointer] = self.current_speed
-            self.laser_list[self.data_pointer] = laser
-            self.local_map_list[self.data_pointer] = self.local_map
-            self.data_pointer = (self.data_pointer + 1) % self.len_to_save
-            self.skip_couter -= 1
-            if (self.skip_couter < 0):
-                self.save_pickle()
-                self.skip_couter = self.skip_len
+    # def add_data(self): # add a data to local_map list
+    #     if self.stop or self.laser_data == None or self.local_map == None:
+    #         return
+    #
+    #     if len(self.speed_list) != self.len_to_save:
+    #         self.speed_list.append(self.current_speed)
+    #         self.laser_list.append(self.laser_data)
+    #         self.local_map_list.append(self.local_map)
+    #     else:
+    #         self.speed_list[self.data_pointer] = self.current_speed
+    #         self.laser_list[self.data_pointer] = self.laser_data
+    #         self.local_map_list[self.data_pointer] = self.local_map
+    #         self.data_pointer = (self.data_pointer + 1) % self.len_to_save
+    #
+    #         self.skip_couter -= 1
+    #         if (self.skip_couter < 0):
+    #             self.save_pickle()
+    #             self.skip_couter = self.skip_len
 
     def callback_point(self, data):
         _, _, z = Utility.quaternion_to_euler_angle(data.pose.orientation.x, data.pose.orientation.y,
@@ -231,10 +253,10 @@ class GenerateMap:
         if not self.is_init:
             return
         # local_map = self.get_local_map()
-        if self.local_map is None or self.current_speed is None or self.language is None:
-            return
-        laser_data = [float(x   ) / scan.range_max for x in scan.ranges]
-        self.add_data(laser_data)
+        # if self.local_map is None or self.current_speed is None or self.language is None:
+        #     return
+        self.laser_data = [float(x) / scan.range_max for x in scan.ranges]
+        # self.add_data(laser_data)
 
     def callback_map_image(self, image):
         if not self.is_init:
@@ -244,18 +266,21 @@ class GenerateMap:
         except CvBridgeError as e:
             print(e)
             return
-
+        if self.is_turning > 0:
+            self.is_turning -= 1
+            return
         map_array = Utility.normalize(cv_image)
         self.map["data"] = map_array
-        print ("local map updated")
+        # print ("local map updated")
         self.get_local_map()
-        print ("local map called")
+        self.save_pickle()
+        # print ("local map called")
 
 
     def callback_robot_0(self, odom_data):
 
-        t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map_server")
-        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/robot_0/base_link", t)
+        t = self.tf_listner.getLatestCommonTime("/base_link", "/map_server")
+        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/base_link", t)
         if (
                 odom_data.twist.twist.linear.x == 0 and
                 odom_data.twist.twist.linear.y == 0 and
@@ -264,6 +289,9 @@ class GenerateMap:
             self.stop = True
             return
         else:
+            if math.fabs(odom_data.twist.twist.angular.z) > 0.4:
+                self.is_turning = 3
+                print "turning {}".format(odom_data.twist.twist.angular.z)
             self.stop = False
             self.current_speed = \
                 (odom_data.twist.twist.linear.x, odom_data.twist.twist.linear.y, odom_data.twist.twist.angular.z)
@@ -274,6 +302,8 @@ class GenerateMap:
                                                                      odom_data.pose.pose.orientation.y,
                                                                      odom_data.pose.pose.orientation.z,
                                                                      odom_data.pose.pose.orientation.w)
+        if not self.is_init:
+            return
         pose_robot_start_of_image = [
             self.pose[0] + math.cos(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
             self.pose[1] + math.sin(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
@@ -290,10 +320,10 @@ class GenerateMap:
                     break
             if happend_recently:
                 return_nodes[index] = (nodes[0], point[1], nodes[2])
+
             self.prev_points[self.index_prev_points] = (self.points_description[0][return_nodes[index][0]], return_nodes[index][1])
             self.index_prev_points = (self.index_prev_points + 1) % 10
-        if not self.is_init:
-            return
+
         self.language = return_nodes
 
 
@@ -308,8 +338,8 @@ class GenerateMap:
         # for points in description_degree:
         self.points_description = [position_points, description_degree]
         # print description_degree
-        rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
-        rospy.Subscriber("/robot_0/base_scan_1", LaserScan, self.callback_laser_scan, queue_size=1)
+        rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
+        rospy.Subscriber("/base_scan", LaserScan, self.callback_laser_scan, queue_size=1)
         rospy.spin()
 
     def append_to_pickle(self):
@@ -335,38 +365,45 @@ class GenerateMap:
         pickle.dump(self.points_description,
                     open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "wb"))
 
-    def publish_point(self, (x,y)):
+    def publish_point(self, coordinate, coordinate_next):
         target_goal_simple = PoseStamped()
-        target_goal_simple.pose.position.x = x
-        target_goal_simple.pose.position.y = y
+        target_goal_simple.pose.position.x = coordinate[0]
+        target_goal_simple.pose.position.y = coordinate[1]
         target_goal_simple.pose.position.z = 0
-        target_goal_simple.pose.orientation.w = 1
+        w, x, y, z = Utility.toQuaternion(math.atan2(coordinate_next[1] - coordinate[1], coordinate_next[0] - coordinate[0]), 0, 0)
+        target_goal_simple.pose.orientation.w = w
+        target_goal_simple.pose.orientation.x = x
+        target_goal_simple.pose.orientation.y = y
+        target_goal_simple.pose.orientation.z = z
+
+
         target_goal_simple.header.frame_id = 'map_server'
         target_goal_simple.header.stamp = rospy.Time.now()
         self.publisher.publish(target_goal_simple)
 
     def point_generator(self):
-        while not self.is_init:
-            time.sleep(0.1)
+        time.sleep(0.5)
         while True:
             random.seed(a=None)
-            index = random.randint(len(self.coordinates) - 70, len(self.coordinates) - 50)
-            self.publish_point((self.coordinates[index][0], self.coordinates[index+10][1]))
-            self.move_robot_to_pose_reset_gmap(self.coordinates[index])
-            index += 15
+            start_index = random.randint(0, len(self.coordinates) - 100)
+            end_index = random.randint(start_index + 50, len(self.coordinates)-2)
+            self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
+            self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+2])
+            self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
+            time.sleep(0.5)
+            start_index += 14
             position, quaternion = Utility.get_robot_pose("/map_server")
 
-            while (Utility.distance_vector(position[:2], self.coordinates[index ][:2]) > self.MIN_DISTANCE_TO_PUBLISH):
-                time.sleep(0.1)
-                position, quaternion = Utility.get_robot_pose("/map_server")
-                self.is_init = False
-            self.is_init = True
+            # while (Utility.distance_vector(position[:2], self.coordinates[start_index ][:2]) > self.MIN_DISTANCE_TO_PUBLISH):
+            #     time.sleep(0.1)
+            #     position, quaternion = Utility.get_robot_pose("/map_server")
+            #     self.is_init = False
 
-            print "start index: ", index, " len: ", len(self.coordinates)
+            print "start index: ", start_index, " len: ", end_index - start_index
             while not self.is_init:
                 time.sleep(0.1)
             counter = 30
-            while (index < len(self.coordinates)):
+            while (start_index < end_index):
                 # counter -= 1
                 #
                 # if counter <= 0:
@@ -374,21 +411,29 @@ class GenerateMap:
                 #     self.reset_gmapping()
                 position, quaternion = Utility.get_robot_pose("/map_server")
 
-                if Utility.distance_vector(position[:2], self.coordinates[index][:2]) < self.MIN_DISTANCE_TO_PUBLISH:
-                    index += 1
+                if Utility.distance_vector(position[:2], self.coordinates[start_index][:2]) < self.MIN_DISTANCE_TO_PUBLISH:
+                    start_index += 1
                     continue
 
-
-                while Utility.distance_vector(position[:2], self.coordinates[index][:2]) > self.MAX_DISTANCE_TO_PUBLISH:
-                    time.sleep(0.3)
+                # for bug handling in case of navigation error
+                counter_to_reset = 30
+                while Utility.distance_vector(position[:2], self.coordinates[start_index][:2]) > self.MAX_DISTANCE_TO_PUBLISH\
+                        and counter_to_reset > 0:
+                    time.sleep(0.5)
+                    self.publish_point(self.coordinates[start_index], self.coordinates[start_index+1])
                     position, quaternion = Utility.get_robot_pose("/map_server")
-                    # print ("distance greater waiting")
-                self.publish_point((self.coordinates[index][0],self.coordinates[index][1]))
-                index += 1
+                    print ("distance greater waiting for {} seconds".format(counter_to_reset*0.5))
+                    counter_to_reset -= 1
+                self.publish_point(self.coordinates[start_index],self.coordinates[start_index+1])
+                start_index += 1
+
+                # if we are stuck
+                if counter_to_reset <= 0:
+                    break
             self.is_init = False
-            while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
-                time.sleep(0.1)
-                position, quaternion = Utility.get_robot_pose("/map_server")
+            # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
+            #     time.sleep(0.1)
+            #     position, quaternion = Utility.get_robot_pose("/map_server")
         print "finish execution"
 
     # def call_back_map(self, data):
@@ -405,10 +450,13 @@ def degree_to_object(degree_object, degree_robot):
     return degree_diff
 
 def room(degree):
-    if degree<0:
+    if -150<degree<-30:
         class_prediction = "room_right"
-    else:
+    elif 30<degree<150:
         class_prediction = "room_left"
+    else:
+        class_prediction = None
+
 
     return class_prediction
 
@@ -421,7 +469,7 @@ def t_junction(degree):
         class_prediction = "t_junction_left_forward"
     else:
         # rospy.logerr("unknown intersection")
-        class_prediction = "t_junction"
+        class_prediction = None
 
     return class_prediction
 
@@ -457,8 +505,10 @@ def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
         if (dist < max_r):
             degree = degree_to_object(nodes[1][index][0], degree_robot[2])
             pose = make_pose_stamped(point, nodes[1][index][0])
-            pose2 = tf_listner.transformPose("/robot_0/base_link", pose)
-            list_return.append((index, lang_dic[nodes[1][index][1]](degree), (pose2.pose.position.x, pose2.pose.position.y)))
+            pose2 = tf_listner.transformPose("/base_link", pose)
+            lang = lang_dic[nodes[1][index][1]](degree)
+            if lang != None:
+                list_return.append((index, lang_dic[nodes[1][index][1]](degree), (pose2.pose.position.x, pose2.pose.position.y)))
 
     return list_return
 

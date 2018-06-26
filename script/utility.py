@@ -39,16 +39,11 @@ class Utility:
 
         shape = image.shape[:2]
 
-        print "after copymakeborder", shape
         # cv2.namedWindow('map1', cv2.WINDOW_NORMAL)
-        print "before imshow"
         # cv2.imshow("map1", image)
         # cv2.waitKey(1)
-        print "before matrix"
         matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
-        print "before warpaffine", shape[1], shape[0]
         image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
-        print "after warpaffine"
         # cv2.imshow("map1", image)
         # cv2.waitKey(1)
 
@@ -66,9 +61,9 @@ class Utility:
         number_of_try = 5
         while number_of_try > 0:
             try:
-                t = tf_listner.getLatestCommonTime("/robot_0/base_link", map_topic)
+                t = tf_listner.getLatestCommonTime("/base_link", map_topic)
                 t = rospy.Time(0)
-                position, quaternion = tf_listner.lookupTransform(map_topic, "/robot_0/base_link", t)
+                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_link", t)
             except Exception as e:
                 print e
                 number_of_try -= 1
@@ -123,3 +118,17 @@ class Utility:
         Z = math.degrees(math.atan2(t3, t4))
 
         return X, Y, Z
+
+    @staticmethod
+    def toQuaternion(pitch, roll, yaw):
+        cy = math.cos(yaw * 0.5);
+        sy = math.sin(yaw * 0.5);
+        cr = math.cos(roll * 0.5);
+        sr = math.sin(roll * 0.5);
+        cp = math.cos(pitch * 0.5);
+        sp = math.sin(pitch * 0.5);
+        w = cy * cr * cp + sy * sr * sp;
+        x = cy * sr * cp - sy * cr * sp;
+        y = cy * cr * sp + sy * sr * cp;
+        z = sy * cr * cp - cy * sr * sp;
+        return w, x, y, z

@@ -6,7 +6,7 @@ include "pioneer.inc"
 include "map.inc"
 include "sick.inc"
 include "blob_follower_model.inc"
-
+# interval_sim 100
 # time to pause (in GUI mode) or quit (in headless mode (-g)) the simulation
 quit_time 3600 # 1 hour of simulated time
 
@@ -62,57 +62,15 @@ define m intersection
 )
 
 
-pioneer2dx
+pioneer2dx_base_no_sonar
 (
   color "red"
   # can refer to the robot by this name
   name "r0"
   pose [ -13.551 3.242 0.000 169.762 ]
-
-  # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] )
-
-  # report error-free position in world coordinates
-   blobfinder(
-      pose [0.000 0.000 0.000 180.000]
-      colors_count 6
-      name "blob"
-      colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]
-      alwayson 1
-      update_interval 1
-      fov 170
-      range 1.5
-      image [ 64 64 ]
-      pan 0
-    )
-    # blobfinder(
-    #   pose [0.000 0.000 0.000 0.000]
-    #   colors_count 6
-    #   name "blob2"
-    #   colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]
-    #   alwayson 1
-    #   update_interval 1
-    #   fov 180
-    #   range 30.0
-    #   image [ 640 640 ]
-    #   pan 0
-    # )
   localization "gps"
   localization_origin [ 0 0 0 0 ]
 )
 
-fancypioneer2dx
-(
-  color "green"
-  # can refer to the robot by this name
-  name "r1"
-  pose [ 0.700 0.985 0.000 150.800 ]
 
-  # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
-  sicklaser( pose [ 0.000 0.000 0.000 0.000 ] )
-
-  # report error-free position in world coordinates
-
-  localization "gps"
-  localization_origin [ 0 0 0 0 ]
-)

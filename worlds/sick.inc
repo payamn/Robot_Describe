@@ -2,11 +2,11 @@
 define sicksensor sensor
 (				
   # factory settings for LMS200	
-  range [ 0.0 8.0 ]
+  range [ 0.0 18.0 ]
 	pose [ 0 0 0.1 0 ]
-  fov 180
-  # samples 512
-  samples 360 # still useful but much faster to compute
+  fov 270
+  samples 540
+  # samples 360 # still useful but much faster to compute
   color_rgba [ 0 0 1 0.15 ]
 )
 
@@ -31,7 +31,7 @@ define sickbase sickcommon
 define fancysickbase sickcommon
 (
   # bottom
-  block( 
+  block(
     points 4
     point[0] [ -0.02 -0.077 ]
     point[1] [  0.078 -0.077 ]

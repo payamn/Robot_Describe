@@ -59,8 +59,8 @@ class GeneratePath:
             print ("robot not moving skiping the sequence")
             return
 
-        t = self.tf_listner.getLatestCommonTime("/robot_0/base_link", "/map_server")
-        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/robot_0/base_link", t)
+        t = self.tf_listner.getLatestCommonTime("/base_link", "/map_server")
+        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/base_link", t)
         # print position
         self.positions.append(position)
         self.counter += 1
@@ -77,7 +77,7 @@ class GeneratePath:
 
     def write_to_pickle(self):
         rospy.init_node('Path_saver')
-        rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.callback_robot_0)
+        rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0)
 
         rospy.spin()
 
@@ -105,7 +105,7 @@ class GeneratePath:
 
     def read_from_pickle(self):
         rospy.init_node('Path_follower')
-        rospy.Subscriber("/robot_0/base_pose_ground_truth", Odometry, self.call_back_laser_read)
+        rospy.Subscriber("/base_pose_ground_truth", Odometry, self.call_back_laser_read)
         while True:
             random.seed(a=None)
             index = random.randint(0, len(self.coordinates)-1)

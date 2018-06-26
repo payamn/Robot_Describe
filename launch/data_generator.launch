@@ -1,7 +1,7 @@
 <launch>
-	<arg name="base_frame" default="robot_0/base_link" />
+	<arg name="base_frame" default="base_link" />
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
-	<arg name="odom_frame" default="robot_0/odom" />
+	<arg name="odom_frame" default="odom" />
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
@@ -11,8 +11,8 @@
 	<arg name="move_base_goal_frequency" default="0.5" />
 
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/$(arg map_name).world">
-		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
-		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
+		<!--<remap from="/robot_0/blob" to="/robot_0/blob_0" />-->
+		<!--<remap from="/robot_0/cmd_vel" to="/cmd_vel" />-->
 		<param name="map_name" value="$(arg map_name)"/>
 	</node>
 
@@ -44,7 +44,7 @@
 	<!--<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="30.15 26.5 0 0 0 0 -1 gmap $(arg odom_frame) 100" />-->
 
 	<!--<include file="$(find robot_describe)/launch/amcl.launch">-->
-		<!--<remap from="scan" to="robot_0/base_scan_1"/>-->
+		<!--<remap from="scan" to="base_scan"/>-->
 		<!--<param name="odom_frame_id" value="$(arg odom_frame)"/>-->
 		<!--<param name="base_frame_id" value="$(arg base_frame)"/>-->
 		<!--<param name="global_frame_id" value="amcl_map"/>-->

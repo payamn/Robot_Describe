@@ -2,8 +2,8 @@ my_costmap:
   footprint: [[-0.25, -0.25], [-0.25, 0.25], [0.25, 0.25], [0.25, -0.25]]
   static_map: true
   rolling_window: false
-  robot_base_frame: "/robot_0/base_link"
+  robot_base_frame: "/base_link"
   map_topic: "gmap"
   publish_frequency: 20
   obstacles:
-    observation_sources: robot_0/base_scan_1
+    observation_sources: base_scan

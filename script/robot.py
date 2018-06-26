@@ -147,12 +147,12 @@ class Robot:
             self.dataset.write_bag(self.language_topic, self.lang_bag_str)
             self.remaining_laser_scan = LASER_SCAN_WINDOW / 2
             for i in range (LASER_SCAN_WINDOW):
-                if (not self.dataset.write_bag("/robot_0/base_scan_1", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
+                if (not self.dataset.write_bag("/base_scan", self.laser_scans[(i + self.laser_pointer) % LASER_SCAN_WINDOW])):
                     self.not_change = 0
                     self.lock.release()
                     return
 
-                self.dataset.write_bag("/robot_0/speed",
+                self.dataset.write_bag("/speed",
                                        self.speeds[(i + self.laser_pointer) % LASER_SCAN_WINDOW])
 
             threading.Timer(0.0, self.dataset.new_sequence).start()

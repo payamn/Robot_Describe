@@ -1,9 +1,9 @@
 <launch>
-    <arg name="base_frame" default="robot_0/base_link" />
-	<arg name="odom_frame" default="robot_0/odom" />
+    <arg name="base_frame" default="base_link" />
+	<arg name="odom_frame" default="odom" />
 
     <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
-		<remap from="scan" to="robot_0/base_scan_1"/>
+		<remap from="scan" to="base_scan"/>
 		<remap from="map" to="gmap"/>
 
 		<param name="odom_frame" value="$(arg odom_frame)"/>
@@ -16,6 +16,7 @@
 	    <param name="ymin" value="-100"/>
 	    <param name="xmax" value="100"/>
 	    <param name="ymax" value="100"/>[
+		<param name="maxRange" value="18"/>
 
 		<param name="global_frame_id" value="map"/>
         <!--<rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />-->

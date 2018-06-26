@@ -1,5 +1,5 @@
 <launch>
-   <arg name="robot_frame" default="robot_0/base_link" />
+   <arg name="robot_frame" default="base_link" />
    <node pkg="mbf_costmap_nav" type="mbf_costmap_nav" respawn="false" name="move_base_flex" output="screen">
       <param name="tf_timeout" value="1.5"/>
       <param name="planner_max_retries" value="3"/>
@@ -11,7 +11,7 @@
 
       <!-- Local param -->
       <!-- <param name="TebLocalPlannerROS/odom_topic" value="/robot_0/odom" /> -->
-      <param name="odom" value="/robot_0/odom" />
+      <param name="odom" value="/odom" />
 
 
       <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />

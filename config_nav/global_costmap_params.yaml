@@ -17,7 +17,7 @@ GlobalPlanner:
 #Independent settings for the planner's costmap
 global_costmap: 
   global_frame: /map_server
-  robot_base_frame: robot_0/base_link
+  robot_base_frame: base_link
   update_frequency: 1.0
   publish_frequency: 1.0
   static_map: true
