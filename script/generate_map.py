@@ -431,6 +431,7 @@ class GenerateMap:
                 if counter_to_reset <= 0:
                     break
             self.is_init = False
+            time.sleep()
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
             #     position, quaternion = Utility.get_robot_pose("/map_server")

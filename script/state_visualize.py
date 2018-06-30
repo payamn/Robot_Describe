@@ -136,7 +136,11 @@ class ExecPath(smach.State):
         # print(userdata)
 
         action_thread = threading.Thread(target=smach_ros.SimpleActionState.execute, args=(self.simple_action_state, userdata,))
-        action_thread.start()
+        try:
+            action_thread.start()
+        except Exception as e:
+            rospy.logerr('Exception in thread start' + e)
+
         # action_thread.join()
 
         while not rospy.is_shutdown():
