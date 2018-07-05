@@ -31,6 +31,7 @@ import rospkg
 from utility import *
 import pickle
 import math
+import constants
 from utils import model_utils
 from utils.configs import *
 
@@ -74,8 +75,6 @@ class GenerateMap:
         self.img_sub = None
         self.MIN_DISTANCE_TO_PUBLISH = 5
         self.MAX_DISTANCE_TO_PUBLISH = 7
-        self.LOCAL_DISTANCE = 6.6
-        self.LOCAL_MAP_DIM = 8
 
         self.bridge = CvBridge()
 
@@ -185,14 +184,14 @@ class GenerateMap:
 
 
         image = Utility.sub_image(self.map["data"], self.map["info"].resolution, (position[0]  , position[1]), z,
-                          self.LOCAL_MAP_DIM, self.LOCAL_MAP_DIM, only_forward=True)
+                          constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True)
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(image))
-        self.local_map = image
+        self.local_map = image.copy()
 
         if annotated_publish and self.language is not None:
             for visible in self.language:
-                x = int(np.ceil(visible[2][0]/self.LOCAL_MAP_DIM*image.shape[0] ))
-                y = int(np.ceil((visible[2][1]/(self.LOCAL_MAP_DIM/2.0) + 1)/2*image.shape[0]))
+                x = int(np.ceil(visible[2][0]/constants.LOCAL_MAP_DIM*image.shape[0] ))
+                y = int(np.ceil((visible[2][1]/(constants.LOCAL_MAP_DIM/2.0) + 1)/2*image.shape[0]))
 
                 print visible[1]
                 cv2.circle(image, (x, y), 4, 100)
@@ -314,13 +313,13 @@ class GenerateMap:
 
         # new pose is half of the distance we want to cover for language topic
         pose_robot_start_of_image = [
-            self.pose[0] + math.cos(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
-            self.pose[1] + math.sin(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
+            self.pose[0] + math.cos(self.robot_orientation_degree[2]*math.pi/180)*constants.LOCAL_DISTANCE / 2.0,
+            self.pose[1] + math.sin(self.robot_orientation_degree[2]*math.pi/180)*constants.LOCAL_DISTANCE / 2.0,
             ]
 
         # closest node to the point half distance ahead of a robot so we will have objects that are ahead of robot
         return_nodes = closest_node(np.asarray([pose_robot_start_of_image[0],   pose_robot_start_of_image[1]]),
-                                    self.points_description, self.robot_orientation_degree, self.LOCAL_DISTANCE / 2.0
+                                    self.points_description, self.robot_orientation_degree, constants.LOCAL_DISTANCE / 2.0
                                   , self.tf_listner)
         # for index, nodes in enumerate(return_nodes):
 

@@ -4,6 +4,7 @@ import unicodedata
 import string
 import re
 import collections
+import constants
 import os
 import random
 import shutil
@@ -279,7 +280,7 @@ class Map_Model:
             word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
             # word_encoded_class_parent = Variable(word_encoded_class_parent).cuda() if use_cuda else Variable(
             #     word_encoded_class_parent)
-            divide = torch.FloatTensor([[1/6.6, 1/3.3]])
+            divide = torch.FloatTensor([[1/constants.LOCAL_MAP_DIM, 1/(constants.LOCAL_MAP_DIM/2.0)]])
             divide = divide.repeat(5, 1)
             divide = divide.unsqueeze(0)
             addition = torch.FloatTensor([[0, 1]])
