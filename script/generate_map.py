@@ -54,6 +54,7 @@ class GenerateMap:
         self.language = None
         self.data_pointer = 0
         self.image_pub = rospy.Publisher("local_map", Image, queue_size=1)
+        self.image_pub_annotated = rospy.Publisher("local_map_annotated", Image, queue_size=1)
         self.laser_data = None
         self.laser_list = []
         self.speed_list = []
@@ -74,6 +75,7 @@ class GenerateMap:
         self.MIN_DISTANCE_TO_PUBLISH = 5
         self.MAX_DISTANCE_TO_PUBLISH = 7
         self.LOCAL_DISTANCE = 6.6
+        self.LOCAL_MAP_DIM = 8
 
         self.bridge = CvBridge()
 
@@ -150,6 +152,7 @@ class GenerateMap:
         self.local_map_list = []
         self.local_map = None
         self.current_speed = None
+        self.language = None
         self.prev_points = [([0, 0],0 )for x in range(10)]
 
         time.sleep(0.5)
@@ -164,7 +167,7 @@ class GenerateMap:
 
         self.is_init = True
 
-    def get_local_map(self):
+    def get_local_map(self, annotated_publish=True):
         self.get_map_info()
         # time.sleep(5)
         if not self.map.has_key("info") or not self.is_init:
@@ -182,21 +185,21 @@ class GenerateMap:
 
 
         image = Utility.sub_image(self.map["data"], self.map["info"].resolution, (position[0]  , position[1]), z,
-                          self.LOCAL_DISTANCE, self.LOCAL_DISTANCE, only_forward=True)
-
-        # msg = Image()
-        # msg.header.stamp = rospy.Time.now()
-        # msg.format = "jpeg"
-        # msg.data =
-        # # Publish new image
+                          self.LOCAL_MAP_DIM, self.LOCAL_MAP_DIM, only_forward=True)
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(image))
-        print "published msg"
-        # cv2.namedWindow('local', cv2.WINDOW_NORMAL)
-
-        # cv2.imshow("local", image)
-        # cv2.waitKey(1)
-
         self.local_map = image
+
+        if annotated_publish and self.language is not None:
+            for visible in self.language:
+                x = int(np.ceil(visible[2][0]/self.LOCAL_MAP_DIM*image.shape[0] ))
+                y = int(np.ceil((visible[2][1]/(self.LOCAL_MAP_DIM/2.0) + 1)/2*image.shape[0]))
+
+                print visible[1]
+                cv2.circle(image, (x, y), 4, 100)
+
+            self.image_pub_annotated.publish(self.bridge.cv2_to_imgmsg(image))
+
+
 
 
     def save_pickle(self):
@@ -212,8 +215,8 @@ class GenerateMap:
         #     local_maps = self.local_map_list[self.data_pointer:] + self.local_map_list[0:self.data_pointer]
         print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
         data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language}
-        # pickle.dump(data,
-        #             open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
+        pickle.dump(data,
+                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     # def add_data(self): # add a data to local_map list
@@ -289,9 +292,13 @@ class GenerateMap:
             self.stop = True
             return
         else:
-            if math.fabs(odom_data.twist.twist.angular.z) > 0.4:
-                self.is_turning = 3
-                print "turning {}".format(odom_data.twist.twist.angular.z)
+            if math.fabs(odom_data.twist.twist.angular.z) > 0.5:
+                self.is_turning = 5
+                # print "turning {}".format(odom_data.twist.twist.angular.z)
+            elif math.fabs(odom_data.twist.twist.angular.z) > 0.3 and self.is_turning < 2:
+                self.is_turning = 2
+
+
             self.stop = False
             self.current_speed = \
                 (odom_data.twist.twist.linear.x, odom_data.twist.twist.linear.y, odom_data.twist.twist.angular.z)
@@ -304,25 +311,29 @@ class GenerateMap:
                                                                      odom_data.pose.pose.orientation.w)
         if not self.is_init:
             return
+
+        # new pose is half of the distance we want to cover for language topic
         pose_robot_start_of_image = [
             self.pose[0] + math.cos(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
             self.pose[1] + math.sin(self.robot_orientation_degree[2]*math.pi/180)*self.LOCAL_DISTANCE / 2.0,
             ]
 
-
-        return_nodes = closest_node(np.asarray([pose_robot_start_of_image[0], pose_robot_start_of_image[1]]), self.points_description, self.robot_orientation_degree, self.LOCAL_DISTANCE / 2.0
+        # closest node to the point half distance ahead of a robot so we will have objects that are ahead of robot
+        return_nodes = closest_node(np.asarray([pose_robot_start_of_image[0],   pose_robot_start_of_image[1]]),
+                                    self.points_description, self.robot_orientation_degree, self.LOCAL_DISTANCE / 2.0
                                   , self.tf_listner)
-        for index, nodes in enumerate(return_nodes):
-            happend_recently = False
-            for point in self.prev_points:
-                if point[0][0] == self.points_description[0][nodes[0]][0] and point[0][1] == self.points_description[0][nodes[0]][1]:
-                    happend_recently = True
-                    break
-            if happend_recently:
-                return_nodes[index] = (nodes[0], point[1], nodes[2])
+        # for index, nodes in enumerate(return_nodes):
 
-            self.prev_points[self.index_prev_points] = (self.points_description[0][return_nodes[index][0]], return_nodes[index][1])
-            self.index_prev_points = (self.index_prev_points + 1) % 10
+            # happend_recently = False
+            # for point in self.prev_points:
+            #     if point[0][0] == self.points_description[0][nodes[0]][0] and point[0][1] == self.points_description[0][nodes[0]][1]:
+            #         happend_recently = True
+            #         break
+            # if happend_recently:
+            #     return_nodes[index] = (nodes[0], point[1], nodes[2])
+
+            # self.prev_points[self.index_prev_points] = (self.points_description[0][return_nodes[index][0]], return_nodes[index][1])
+            # self.index_prev_points = (self.index_prev_points + 1) % 10
 
         self.language = return_nodes
 
@@ -431,7 +442,7 @@ class GenerateMap:
                 if counter_to_reset <= 0:
                     break
             self.is_init = False
-            time.sleep()
+            time.sleep(0.1)
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
             #     position, quaternion = Utility.get_robot_pose("/map_server")
@@ -450,15 +461,24 @@ def degree_to_object(degree_object, degree_robot):
     degree_diff = np.arctan2(math.sin(degree_diff), math.cos(degree_diff)) * 180 / math.pi
     return degree_diff
 
-def room(degree):
-    if -150<degree<-30:
-        class_prediction = "room_right"
-    elif 30<degree<150:
-        class_prediction = "room_left"
-    else:
+def close_room(degree):
+    # if -150<degree<-30:
+    #     class_prediction = "room_right"
+    # elif 30<degree<150:
+    #     class_prediction = "room_left"
+    # else:
+    #     class_prediction = None
+    if -30<degree<30 or degree > 150 or degree < -150:
         class_prediction = None
+    else:
+        class_prediction = "close_room"
+    return class_prediction
 
-
+def open_room(degree):
+    if -30 < degree < 30 or degree > 150 or degree < -150:
+        class_prediction = None
+    else:
+        class_prediction = "open_room"
     return class_prediction
 
 def t_junction(degree):
@@ -482,8 +502,10 @@ def corner(degree):
 
     return class_prediction
 
+def junction(degree):
+    return "4_junction"
 
-lang_dic = {"room":room, "t_junction":t_junction, "corner":corner}
+lang_dic = {"close_room":close_room, "open_room":open_room, "t_junction":t_junction, "corner":corner, "4_junction":junction}
 
 def make_pose_stamped(pose, degree):
     out = PoseStamped()

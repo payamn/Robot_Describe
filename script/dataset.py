@@ -62,6 +62,7 @@ class Map_Dataset(Dataset):
         self.word_encoding = model_utils.WordEncoding()
 
 
+
     def __len__(self):
         return len(self.files)
 
@@ -78,16 +79,17 @@ class Map_Dataset(Dataset):
                 word_encoded.append((self.word_encoding.classes["noting"], (0, 0)))
             word_encoded_class, word_encoded_pose = zip(*word_encoded)
             local_maps = dic_data["local_maps"]
-            local_maps = torch.from_numpy(np.stack([local_maps[19], local_maps[10], local_maps[0]])).type(torch.FloatTensor)
+            local_maps = cv2.resize(local_maps, (224, 224))
+            local_maps = torch.from_numpy(np.stack([local_maps, local_maps, local_maps])).type(torch.FloatTensor)
             word_encoded_pose = [x for x in enumerate(word_encoded_pose)]
             word_encoded_pose.sort(key=lambda l: (l[1][0], l[1][1]))
             word_encoded_class = [word_encoded_class[word_encoded_pose[x][0]] for x in range(len(word_encoded_class))]
-            word_encoded_class_parent = [self.word_encoding.get_parent_class(word_class) for word_class in word_encoded_class]
+            #word_encoded_class_parent = [self.word_encoding.get_parent_class(word_class) for word_class in word_encoded_class]
             word_encoded_pose = [x[1] for x in word_encoded_pose]
             word_encoded_pose = torch.FloatTensor(word_encoded_pose)
             word_encoded_class = torch.LongTensor(word_encoded_class)
-            word_encoded_class_parent = torch.LongTensor(word_encoded_class_parent)
-        return word_encoded_class, word_encoded_class_parent, word_encoded_pose, local_maps
+            #word_encoded_class_parent = torch.LongTensor(word_encoded_class_parent)
+        return word_encoded_class, word_encoded_pose, local_maps
 
 
 

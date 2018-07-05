@@ -47,7 +47,7 @@ class Utility:
         # cv2.imshow("map1", image)
         # cv2.waitKey(1)
 
-        x = int(np.ceil(center[0] - width / 2)) if not only_forward else int(np.ceil(center[0] - width / 9))
+        x = int(np.ceil(center[0] - width / 2)) if not only_forward else int(np.ceil(center[0]))
         y = int(np.ceil(center[1] - height / 2))
 
         image = image[y:y + height, x:x + width]
