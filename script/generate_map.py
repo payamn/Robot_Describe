@@ -393,10 +393,26 @@ class GenerateMap:
 
     def point_generator(self):
         time.sleep(0.5)
+        # we will first generate some short_range path and then long ones
+        short_range = 50
+        long_range = 20
         while True:
             random.seed(a=None)
-            start_index = random.randint(0, len(self.coordinates) - 100)
-            end_index = random.randint(start_index + 50, len(self.coordinates)-2)
+            if short_range > 0:
+                short_range -= 1
+                start_index = random.randint(0, len(self.coordinates) - 100)
+                end_index = min(random.randint(start_index + 50, start_index + 100)
+                                , len(self.coordinates)-2)
+                print ("{} short range remaining".format(short_range))
+            elif long_range>0:
+                long_range -= 1
+                start_index = random.randint(0, len(self.coordinates) - 300)
+                end_index = random.randint(start_index + 100, len(self.coordinates) - 2)
+                print ("{} long range remaining".format(long_range))
+            else:
+                print ("finished all for this map")
+                break
+
             self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
             self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+2])
             self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
@@ -544,7 +560,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=0)
+    generate_map = GenerateMap(start_pickle=1850)
 
     if args.generate_point:
         generate_map.write_to_pickle()

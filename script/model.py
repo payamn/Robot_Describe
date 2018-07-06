@@ -206,7 +206,7 @@ class Map_Model:
         p = sub.Popen(['rm', '-r', './logs'])
         p.communicate()
         self.logger = Logger('./logs')
-        self.model = Network_Map((1,(119,119)), self.dataset.word_encoding.len_classes())
+        self.model = Network_Map((1,(244,244)), self.dataset.word_encoding.len_classes())
         if use_cuda:
             self.model = self.model.cuda()
 
@@ -214,8 +214,14 @@ class Map_Model:
         for parameter in self.model.parameters():
             print(parameter.size())
 
-        self.prev_loss = None
-        self.loss = None
+
+        # Model
+        self.weight_loss = torch.ones([len(self.dataset.word_encoding.classes)])
+        self.weight_loss[self.dataset.word_encoding.classes["noting"]] = 0.05  # nothing
+        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
+        self.criterion_poses = nn.MSELoss(size_average=False)
+
+
         self.start_epoch = 0
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=0.06)
         self.project_path = "."
@@ -225,13 +231,125 @@ class Map_Model:
                 print("=> loading checkpoint '{}'".format(resume_path))
                 checkpoint = torch.load(resume_path)
                 self.start_epoch = checkpoint['epoch']
-                # self.best_lost = checkpoint['epoch_lost']
+                self.best_lost = checkpoint['epoch_lost']
                 self.model.load_state_dict(checkpoint['model_dict'])
-                # self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
                 print("=> no checkpoint found at '{}'".format(resume_path))
+
+    def model_forward(self, batch_size, mode, iter):
+        iter_data_loader = None
+        dataset = None
+        if mode == "train":
+            iter_data_loader = self.dataloader.__iter__()
+            dataset = self.dataset
+        elif mode == "validation":
+            iter_data_loader = self.dataloader_validation.__iter__()
+            dataset = self.dataset_validation
+        print (mode, len(dataset))
+        epoch_loss_total = 0
+        epoch_loss_classes = 0
+        epoch_loss_poses = 0
+        epoch_accuracy_classes = []
+        epoch_accuracy_poses = []
+        accuracy_each_class = {i: [] for i in range(len(dataset.word_encoding.classes))}
+        for batch, (word_encoded_class, word_encoded_pose, local_map) in enumerate(iter_data_loader):
+            loss_classes = 0
+            loss_poses = 0
+            self.optimizer.zero_grad()
+            batch_accuracy_classes = []
+            batch_accuracy_poses = []
+            local_map = Variable(local_map).cuda() if use_cuda else Variable(local_map)
+            word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
+            # word_encoded_class_parent = Variable(word_encoded_class_parent).cuda() if use_cuda else Variable(word_encoded_class_parent)
+            word_encoded_pose = self.calculate_encoded_pose(word_encoded_pose)
+
+            output_poses, output_classes = self.model(local_map)
+
+            topv, topi = output_classes.data.topk(1)
+
+            b = word_encoded_class != dataset.word_encoding.classes["noting"]
+            b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
+            output_poses = output_poses * b
+            word_encoded_pose = word_encoded_pose * b
+
+            accuracy = 0
+            for i in range(word_encoded_class.size(0)):
+                for j in range(dataset.prediction_number):
+                    accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
+                    index = int(word_encoded_class[i][j].cpu().data)
+                    accuracy_each_class[index].append(accuracy)
+                    if word_encoded_class.data[i][j] != dataset.word_encoding.classes["noting"]:
+                        batch_accuracy_classes.append(accuracy)
+                        epoch_accuracy_classes.append(accuracy)
+                        distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
+                        # distance = distance.squeeze(1)
+                        # accuracy_poses = torch.mean(distance)
+                        batch_accuracy_poses.append(distance.item())
+                        epoch_accuracy_poses.append(distance.item())
+            output_classes = output_classes.permute(0, 3, 1, 2)
+            # output_classes_parent = output_classes_parent.permute(0,3,1,2)
+            word_encoded_class = word_encoded_class.unsqueeze(1)
+            # word_encoded_class_parent = word_encoded_class_parent.unsqueeze(1)
+            # output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
+            # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
+            # word_encoded_class = word_encoded_class.squeeze(0)
+
+            # for i in range (output_classes.size(1)):
+            landa_class = 1
+            loss_classes += landa_class * self.criterion_classes(output_classes, word_encoded_class)  # +\
+            # (1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
+
+            loss_poses += self.criterion_poses(output_poses, word_encoded_pose)
+            landa = 1.0 / 4
+            loss_total = landa * loss_poses + (1 - landa) * loss_classes
+
+            epoch_loss_classes += loss_classes.item() / word_encoded_class.size()[0]
+            epoch_loss_poses += loss_poses.item() / word_encoded_class.size()[0]
+            epoch_loss_total += epoch_loss_classes + epoch_loss_poses
+            batch_accuracy_classes = np.mean(batch_accuracy_classes)
+            batch_accuracy_poses = np.mean(batch_accuracy_poses)
+            # loss = loss/batch_size
+            print_loss_avg = epoch_loss_total / (batch_size * (batch + 1))
+            print(mode+' Epoch %d %s (%.2f%%) %.4f acc_classes:%.4f acc_posses:%.4f' % (
+            iter + 1, timeSince(self.start, (batch + 1) / (len(dataset) // batch_size))
+            , float((batch + 1)) / (len(dataset) // batch_size) * 100, print_loss_avg, batch_accuracy_classes,
+            batch_accuracy_poses))
+
+            if mode== "train":
+                loss_total.backward()
+                self.optimizer.step()
+
+            info = {
+                'batch_loss'+mode: loss_total.item(),
+                'batch_accuracy_classes'+mode: batch_accuracy_classes,
+                'batch_accuracy_poses'+mode: batch_accuracy_poses,
+                'loss_poses'+mode: loss_poses.item(),
+                'batch_loss'+mode: loss_total.item(),
+            }
+
+            for tag, value in info.items():
+                self.logger.scalar_summary(tag, value, iter * (len(dataset) // batch_size) + batch)
+        epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
+        epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
+
+        info = {
+            'Epoch_loss_'+mode: epoch_loss_total / ((len(dataset) // batch_size) * batch_size),
+            'Epoch_accuracy_classes_'+mode: epoch_accuracy_classes,
+            'Epoch_accuracy_poses_'+mode: epoch_accuracy_poses,
+            'epoch_loss_classes_'+mode: epoch_loss_classes / ((len(dataset) // batch_size) * batch_size),
+            'epoch_loss_poses_'+mode: epoch_loss_poses / ((len(dataset) // batch_size) * batch_size)
+        }
+        for i in range(len(dataset.word_encoding.classes)):
+            info["Epoch_" + mode + "_" + dataset.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
+
+        for tag, value in info.items():
+            self.logger.scalar_summary(tag, value, iter + 1)
+        return epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total
+
+
 
     def visualize_dataset(self, dataset=None):
         if dataset is None or dataset=="train":
@@ -241,117 +359,34 @@ class Map_Model:
             dataset = self.dataset_validation
             print ("use validation data to visualize")
         self.validation(1, 0, False, plot= True, dataset=dataset)
+
+    def calculate_encoded_pose(self, word_encoded_pose):
+        divide = torch.FloatTensor([[1 / constants.LOCAL_MAP_DIM, 1 / (constants.LOCAL_MAP_DIM / 2.0)]])
+        divide = divide.repeat(5, 1)
+        divide = divide.unsqueeze(0)
+        addition = torch.FloatTensor([[0, 1]])
+        addition = addition.repeat(5, 1)
+        addition = addition.unsqueeze(0)
+        divide2 = torch.FloatTensor([[1, 0.5]])
+        divide2 = divide2.repeat(5, 1)
+        divide2 = divide2.unsqueeze(0)
+        word_encoded_pose = (word_encoded_pose * divide + addition) * divide2  # to be between 0-1
+        word_encoded_pose = Variable(word_encoded_pose).cuda() if use_cuda else Variable(word_encoded_pose)
+        return word_encoded_pose
+
     def validation(self, batch_size, iter, save, plot=False, dataset=None):
         if dataset is None:
             dataset = self.dataset_validation
+        self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=10, batch_size=batch_size, drop_last=True)
 
-        dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=1, batch_size=batch_size, drop_last=True)
+        epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "validation", iter)
 
-        weight_loss = torch.ones([10])
-        weight_loss[8] = 0.05    # nothing
-        weight_loss[0] = 0.5     # room_right
-        weight_loss[1] = 0.5     # room_left
-
-        # weight_loss_parent = torch.ones([4])
-        # weight_loss_parent[3] = 0.05
-
-        criterion_classes = nn.NLLLoss(weight=weight_loss.cuda())
-        # criterion_classes_parents = nn.NLLLoss(weight=weight_loss_parent.cuda())
-
-        criterion_poses = nn.MSELoss()
-
-        iter_data_loader = dataloader_validation.__iter__()
-        epoch_loss_total = 0
-        epoch_loss_classes = 0
-        epoch_loss_poses = 0
-        epoch_accuracy_classes = []
-        epoch_accuracy_poses = []
-        accuracy_each_class = {i: [] for i in range(10)}
-
-        for batch, (word_encoded_class, word_encoded_pose, local_map) in enumerate(dataloader_validation):
-            self.optimizer.zero_grad()
-            print (batch)
-            loss_classes = 0
-            loss_poses = 0
-            batch_accuracy_classes = []
-            batch_accuracy_poses = []
-            local_map = Variable(local_map).cuda() if use_cuda else Variable(local_map)
-            # local_map =  local_map.unsqueeze(1)
-            word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
-            # word_encoded_class_parent = Variable(word_encoded_class_parent).cuda() if use_cuda else Variable(
-            #     word_encoded_class_parent)
-            divide = torch.FloatTensor([[1/constants.LOCAL_MAP_DIM, 1/(constants.LOCAL_MAP_DIM/2.0)]])
-            divide = divide.repeat(5, 1)
-            divide = divide.unsqueeze(0)
-            addition = torch.FloatTensor([[0, 1]])
-            addition = addition.repeat(5, 1)
-            addition = addition.unsqueeze(0)
-            divide2 = torch.FloatTensor([[1, 0.5]])
-            divide2 = divide2.repeat(5, 1)
-            divide2 = divide2.unsqueeze(0)
-            word_encoded_pose = (word_encoded_pose * divide + addition) * divide2#to be between 0-1
-            word_encoded_pose = Variable(word_encoded_pose).cuda() if use_cuda else Variable(word_encoded_pose)
-            output_poses, output_classes = self.model(local_map)
-            topv, topi = output_classes.data.topk(1)
-            if plot:
-                out_classes = topi.view(word_encoded_class.shape)
-                self.dataset.word_encoding.visualize_map(local_map[:,0], out_classes, output_poses, word_encoded_class, word_encoded_pose)
-
-            # print (topi)
-            # print (word_encoded_class)
-            # print (output_poses)
-            # print (word_encoded_pose)
-            accuracy = 0
-
-            b = word_encoded_class != 8
-            b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
-            output_poses = output_poses * b
-            word_encoded_pose = word_encoded_pose * b
-
-            for i in range(word_encoded_class.size(0)):
-                for j in range(self.dataset.prediction_number):
-                    accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
-                    index = int(word_encoded_class[i][j].cpu().data)
-                    accuracy_each_class[index].append(accuracy)
-                    if word_encoded_class.data[i][j] != 8:
-                        batch_accuracy_classes.append(accuracy)
-                        epoch_accuracy_classes.append(accuracy)
-                        distance = self.distance(word_encoded_pose[i][j].view(1,2), output_poses[i][j].view(1,2))
-                        distance = distance.squeeze(0)
-                        accuracy_poses = torch.mean(distance)
-                        batch_accuracy_poses.append(accuracy_poses)
-                        epoch_accuracy_poses.append(accuracy_poses)
-            output_classes = output_classes.permute(0, 3, 1, 2)
-            # output_classes_parent = output_classes_parent.permute(0, 3, 1, 2)
-
-            word_encoded_class = word_encoded_class.unsqueeze(1)
-            # word_encoded_class_parent = word_encoded_class_parent.unsqueeze(1)
-
-            # output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
-            # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
-            # word_encoded_class = word_encoded_class.squeeze(0)
-
-            # for i in range (output_classes.size(1)):
-            landa_class = 1
-            loss_classes += landa_class * criterion_classes(output_classes, word_encoded_class) #+ \
-                            #(1 - landa_class) * criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
-            loss_poses += criterion_poses(output_poses, word_encoded_pose)
-            landa = 2.0 / 4
-            loss_total = landa * loss_poses + (1 - landa) * loss_classes
-
-
-            epoch_loss_classes += loss_classes.data[0] / word_encoded_class.size()[0]
-            epoch_loss_poses += loss_poses.data[0] / word_encoded_class.size()[0]
-            epoch_loss_total += epoch_loss_classes + epoch_loss_poses
-
-
-        epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
-        epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
         print('validation loss: %.4f class_accuracy: %.4f pose_accuracy%.4f' %
               (epoch_loss_total / (len(self.dataset_validation) // batch_size), epoch_accuracy_classes, epoch_accuracy_poses))
 
         is_best = self.best_lost > epoch_loss_total
-        if (self.best_lost > epoch_loss_total and save == True and plot == False):
+        print (is_best)
+        if (save == True and plot == False):
             self.save_checkpoint({
                 'epoch': iter + 1,
                 'model_dict': self.model.state_dict(),
@@ -361,443 +396,22 @@ class Map_Model:
         if is_best and plot == False:
             self.best_lost = epoch_loss_total
 
-        if plot == False:
-            info = {
-                'Validation_loss': epoch_loss_total / ((len(self.dataset_validation) // batch_size) * batch_size),
-                'Validation_accuracy_classes': epoch_accuracy_classes,
-                'Validation_accuracy_poses': epoch_accuracy_poses.data[0],
-                'Validation_loss_classes': epoch_loss_classes / ((len(self.dataset_validation) // batch_size) * batch_size),
-                'Validation_loss_poses': epoch_loss_poses / ((len(self.dataset_validation) // batch_size) * batch_size)
-            }
-            for i in range (9):
-                info["validation_" + self.dataset.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
-
-            for tag, value in info.items():
-                self.logger.scalar_summary(tag, value, iter + 1)
-            self.prev_loss = self.loss
-            self.loss = epoch_loss_total
-        print('acc: %f)' % epoch_accuracy_classes)
+        print('validation acc: %f)' % epoch_accuracy_classes)
 
 
     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
         self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10, batch_size=batch_size, drop_last=True)
-        # print (len(self.dataloader))
-        # exit(0)
-        start = time.time()
+        self.start = time.time()
         n_iters = self.start_epoch + n_iters
-        weight_loss = torch.ones([9])
-        weight_loss[8] = 0.05    # nothing
-        weight_loss[0] = 0.5     # room_right
-        weight_loss[1] = 0.5     # room_left
 
-        # weight_loss_parent = torch.ones([4])
-        # weight_loss_parent[3] = 0.05
-
-        criterion_classes = nn.NLLLoss(weight=weight_loss.cuda())
-        # criterion_classes_parents = nn.NLLLoss(weight=weight_loss_parent.cuda())
-
-        criterion_poses = nn.MSELoss(size_average=False)
 
         for iter in range(self.start_epoch, n_iters):
 
-            iter_data_loader = self.dataloader.__iter__()
-            epoch_loss_total = 0
-            epoch_loss_classes = 0
-            epoch_loss_poses = 0
-            epoch_accuracy_classes = []
-            epoch_accuracy_poses = []
-            accuracy_each_class = {i:[] for i in range (9)}
-            for batch , (word_encoded_class, word_encoded_pose, local_map)in enumerate(self.dataloader):
-                loss_classes = 0
-                loss_poses = 0
-                # for batch_index in range (batch_size):
-                self.optimizer.zero_grad()
-                batch_accuracy_classes = []
-                batch_accuracy_poses = []
-
-                local_map = Variable(local_map).cuda() if use_cuda else Variable(local_map)
-                # local_map = local_map.unsqueeze(1)
-                word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
-                # word_encoded_class_parent = Variable(word_encoded_class_parent).cuda() if use_cuda else Variable(word_encoded_class_parent)
-                word_encoded_pose = word_encoded_pose/6 + 1/2 # to be between 0-1
-                word_encoded_pose = Variable(word_encoded_pose).cuda() if use_cuda else Variable(word_encoded_pose)
-
-                output_poses, output_classes = self.model(local_map)
-
-                topv, topi = output_classes.data.topk(1)
-                # print (topi)
-                # print (word_encoded_class)
-                # print (output_poses)
-                # print (word_encoded_pose)
-
-                b = word_encoded_class != 8
-                b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
-                output_poses = output_poses * b
-                word_encoded_pose = word_encoded_pose * b
-
-                accuracy = 0
-                for i in range (word_encoded_class.size(0)):
-                    for j in range (self.dataset.prediction_number):
-                        accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
-                        index = int (word_encoded_class[i][j].cpu().data)
-                        accuracy_each_class[index].append(accuracy)
-                        if word_encoded_class.data[i][j] != 8:
-                            batch_accuracy_classes.append(accuracy)
-                            epoch_accuracy_classes.append(accuracy)
-                            distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
-                            distance = distance.squeeze(1)
-                            accuracy_poses = torch.mean(distance)
-                            batch_accuracy_poses.append(accuracy_poses)
-                            epoch_accuracy_poses.append(accuracy_poses)
-                output_classes = output_classes.permute(0,3,1,2)
-                # output_classes_parent = output_classes_parent.permute(0,3,1,2)
-                word_encoded_class = word_encoded_class.unsqueeze(1)
-                # word_encoded_class_parent = word_encoded_class_parent.unsqueeze(1)
-                # output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
-                # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
-                # word_encoded_class = word_encoded_class.squeeze(0)
-
-                # for i in range (output_classes.size(1)):
-                landa_class = 1
-                loss_classes += landa_class*criterion_classes(output_classes, word_encoded_class) #+\
-                                #(1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
-
-                loss_poses += criterion_poses(output_poses, word_encoded_pose)
-                landa = 1.0/4
-                loss_total = landa*loss_poses + (1-landa)* loss_classes
-
-                epoch_loss_classes += loss_classes.data[0]/word_encoded_class.size()[0]
-                epoch_loss_poses += loss_poses.data[0]/word_encoded_class.size()[0]
-                epoch_loss_total += epoch_loss_classes + epoch_loss_poses
-                batch_accuracy_classes = np.mean(batch_accuracy_classes)
-                batch_accuracy_poses = np.mean(batch_accuracy_poses)
-                # loss = loss/batch_size
-                print_loss_avg = epoch_loss_total / (batch_size*(batch+1))
-                print('Epoch %d %s (%.2f%%) %.4f acc_classes:%.4f acc_posses:%.4f' % (iter+1, timeSince(start, (batch+1) / (len(self.dataset)//batch_size))
-                                            , float((batch+1)) / (len(self.dataset)//batch_size) * 100, print_loss_avg, batch_accuracy_classes, batch_accuracy_poses))
-                loss_total.backward()
-                self.optimizer.step()
-
-                info = {
-                    'batch_loss': loss_total.data[0],
-                    'batch_accuracy_classes': batch_accuracy_classes,
-                    'batch_accuracy_poses': batch_accuracy_poses.data[0],
-                    'loss_poses': loss_poses.data[0],
-                    'batch_loss': loss_total.data[0],
-                }
-
-                for tag, value in info.items():
-                    self.logger.scalar_summary(tag, value, iter*(len(self.dataset)//batch_size)+ batch )
-
-
-            epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
-            epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
-
+            epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             print('Iteration %s (%d %f%%) %.4f avg: %.4f acc:%.4f' %
-                  (timeSince(start, (iter+1) / n_iters),
+                  (timeSince(self.start, (iter+1) / n_iters),
                   (iter + 1), (iter+1) / float(n_iters) * 100, epoch_loss_total,
                    epoch_loss_total/(len(self.dataset)//batch_size),epoch_accuracy_classes))
-
-            # is_best = self.best_lost > epoch_loss_total
-            # if (self.best_lost > epoch_loss_total and save == True):
-            #     self.save_checkpoint({
-            #         'epoch': iter + 1,
-            #         'model_dict': self.model.state_dict(),
-            #         'epoch_lost': epoch_loss_total,
-            #         'optimizer': self.optimizer.state_dict(),
-            #     }, is_best)
-            # if is_best:
-            #     self.best_lost = epoch_loss_total
+            print('acc: %f)' % epoch_accuracy_classes)
 
             self.validation(batch_size, iter, save)
-            # if (iter % 1 == 0):
-            #     self.dataset.shuffle_data()
-            #     error = 0
-            #     for i in range(int (len(self.dataset.list_data))-1):
-            #         error += self.evaluate_check(self.dataset._max_length_laser)
-            #     self.acc = 1- float(error)/((len(self.dataset.list_data))-1)
-            info = {
-                'Epoch_loss':  epoch_loss_total/((len(self.dataset)//batch_size)*batch_size),
-                'Epoch_accuracy_classes': epoch_accuracy_classes,
-                'Epoch_accuracy_poses': epoch_accuracy_poses.data[0],
-                'epoch_loss_classes': epoch_loss_classes/((len(self.dataset)//batch_size)*batch_size),
-                'epoch_loss_poses': epoch_loss_poses/((len(self.dataset)//batch_size)*batch_size)
-            }
-            for i in range (9):
-                info["Epoch_" + self.dataset.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
-
-            for tag, value in info.items():
-                self.logger.scalar_summary(tag, value, iter + 1)
-            print('acc: %f)' % epoch_accuracy_classes)
-            self.prev_loss = self.loss
-            self.loss = epoch_loss_total
-
-#
-# class Model:
-#     def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
-#         filename = os.path.join(self.project_path,filename)
-#         torch.save(state, filename)
-#         if is_best:
-#             shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
-#
-#     def __init__(self, dataset, resume_path = None, learning_rate = 0.001, load_weight = True, batch_size = 20, save=True, number_of_iter=0, real_time_test=False):
-#
-#         self.dataset = dataset
-#         self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10)
-#
-#         plt.ion()
-#         hidden_size = 500
-#         self.learning_rate = learning_rate
-#         self.best_lost = sys.float_info.max
-#         self.distance = nn.PairwiseDistance()
-#         # remove previous tensorboard data first
-#         import subprocess as sub
-#         p = sub.Popen(['rm', '-r', './logs'])
-#         p.communicate()
-#         self.logger = Logger('./logs')
-#         self.encoder = Encoder_RNN_Laser(1, hidden_size, batch_size=batch_size)
-#         self.decoder = DecoderNoRNN(hidden_size, self.dataset.word_encoding.len_classes(),
-#                                        max_length=self.dataset.laser_window)
-#
-#         if use_cuda:
-#             self.encoder = self.encoder.cuda()
-#             self.decoder = self.decoder.cuda()
-#
-#         print("encoder size:")
-#         for parameter in self.decoder.parameters():
-#             print(parameter.size())
-#         print("decoder size:")
-#         for parameter in self.decoder.parameters():
-#             print(parameter.size())
-#         self.prev_loss = None
-#         self.loss = None
-#         self.start_epoch = 0
-#         self.encoder_optimizer = optim.Adam(self.encoder.parameters(), lr=self.learning_rate)
-#         self.decoder_optimizer = optim.Adam(self.decoder.parameters(), lr=self.learning_rate)
-#         self.project_path = "."
-#         if resume_path is not None and load_weight:
-#             self.project_path = os.path.dirname(resume_path)
-#             if os.path.isfile(resume_path):
-#                 print("=> loading checkpoint '{}'".format(resume_path))
-#                 checkpoint = torch.load(resume_path)
-#                 self.start_epoch = checkpoint['epoch']
-#                 self.best_lost = checkpoint['epoch_lost']
-#                 self.encoder.load_state_dict(checkpoint['encoder_dict'])
-#                 self.decoder.load_state_dict(checkpoint['decoder_dict'])
-#                 self.encoder_optimizer.load_state_dict(checkpoint['encoder_optimizer'])
-#                 self.decoder_optimizer.load_state_dict(checkpoint['decoder_optimizer'])
-#                 print("=> loaded checkpoint '{}' (epoch {})"
-#                       .format(resume_path, checkpoint['epoch']))
-#             else:
-#                 print("=> no checkpoint found at '{}'".format(resume_path))
-#
-#         self.train_iters(number_of_iter, print_every=10, save=save, batch_size=batch_size)
-#
-#         # error = 0
-#         # for i in range(len(self.dataset.list_data)):
-#         #     print ("in eval"+ str(i))
-#         #     error += self.evaluate_check(self.dataset._max_length_laser, plot=True)
-#         # accu = 1-float(error)/len(self.dataset.list_data)
-#         #
-#         # print ("accu: {} error{}".format(accu, error))
-#         # raw_input("end")
-#
-#     def train(self, speeds, laser_data, max_length=MAX_LENGTH):
-#
-#         input_length = speeds.size()[1]
-#         batch_size = speeds.size()[0]
-#         encoder_hidden = self.encoder.initHidden(batch_size = batch_size)
-#         encoder_outputs = Variable(torch.zeros(batch_size, max_length, self.encoder.hidden_size))
-#
-#         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
-#
-#         for ei in range(input_length):
-#             encoder_output, encoder_hidden = self.encoder(speeds[:,ei], laser_data[:,ei], encoder_hidden)
-#             encoder_outputs[:,ei] = encoder_output[:,0].clone()
-#
-#         decoder_output = self.decoder(encoder_hidden, encoder_outputs)
-#
-#         return decoder_output
-#
-#
-#     def adjust_learning_rate(self):
-#         if self.prev_loss and self.loss and self.prev_loss <= self.loss:
-#             self.learning_rate = self.learning_rate * 0.96
-#             print ("loss didn't improve so learning rate decreasing to {}".format(self.learning_rate))
-#
-#
-#     def set_learning_rate(self, optimizer):
-#         for param_group in optimizer.param_groups:
-#             param_group['lr'] = self.learning_rate
-#     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=10, save=True):
-#         start = time.time()
-#         n_iters = self.start_epoch + n_iters
-#         criterion_classes = nn.NLLLoss(size_average=False)
-#         criterion_poses = nn.MSELoss(size_average=False)
-#
-#         for iter in range(self.start_epoch, n_iters):
-#             iter_data_loader = self.dataloader.__iter__()
-#             epoch_loss_total = 0
-#             epoch_loss_classes = 0
-#             epoch_loss_poses = 0
-#             for param_group in self.decoder_optimizer.param_groups:
-#                 print ("lr: ", param_group['lr'])
-#             epoch_accuracy_classes = []
-#             epoch_accuracy_poses = []
-#             for batch in range (0, len(self.dataloader)//batch_size):
-#                 loss_classes = 0
-#                 loss_poses = 0
-#                 for batch_index in range (batch_size):
-#                     word_encoded_class, word_encoded_pose, speeds, laser_scans = iter_data_loader.next()
-#                     self.encoder_optimizer.zero_grad()
-#                     self.decoder_optimizer.zero_grad()
-#                     batch_accuracy_classes = []
-#                     batch_accuracy_poses = []
-#                     speeds = Variable(speeds).cuda() if use_cuda else Variable(speeds)
-#                     laser_scans = Variable(laser_scans).cuda() if use_cuda else Variable(laser_scans)
-#                     word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
-#                     word_encoded_pose = word_encoded_pose/6 + 1/2 # to be between 0-1
-#                     word_encoded_pose = Variable(word_encoded_pose).cuda() if use_cuda else Variable(word_encoded_pose)
-#
-#                     output_classes, output_poses = self.train(speeds, laser_scans, self.dataset.laser_window)
-#
-#                     topv, topi = output_classes.data.topk(1)
-#                     # print (topi)
-#                     # print (word_encoded_class)
-#                     # print (output_poses)
-#                     # print (word_encoded_pose)
-#                     accuracy = 0
-#                     for i in range (word_encoded_class.size(0)):
-#                         for j in range (self.dataset.prediction_number):
-#                             if word_encoded_class.data[i][j] != 8:
-#                                 accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
-#                                 batch_accuracy_classes.append(accuracy)
-#                                 epoch_accuracy_classes.append(accuracy)
-#                         distance = self.distance(word_encoded_pose[i], output_poses[i])
-#                         distance = distance.squeeze(1)
-#                         accuracy_poses = torch.mean(distance)
-#                         batch_accuracy_poses.append(accuracy_poses)
-#                         epoch_accuracy_poses.append(accuracy_poses)
-#                     # output_classes = output_classes.permute(0,3,1,2)
-#                     # word_encoded_class = word_encoded_class.unsqueeze(1)
-#                     output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
-#                     # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
-#                     word_encoded_class = word_encoded_class.squeeze(0)
-#
-#                     # for i in range (output_classes.size(1)):
-#                     loss_classes += criterion_classes(output_classes, word_encoded_class)
-#                     loss_poses += criterion_poses(output_poses, word_encoded_pose)
-#
-#                 loss_total = loss_poses + loss_classes
-#
-#                 epoch_loss_classes += loss_classes.data[0]/word_encoded_class.size()[0]
-#                 epoch_loss_poses += loss_poses.data[0]/word_encoded_class.size()[0]
-#                 epoch_loss_total += epoch_loss_classes + epoch_loss_poses
-#                 batch_accuracy_classes = np.mean(batch_accuracy_classes)
-#                 batch_accuracy_poses = np.mean(batch_accuracy_poses)
-#                 # loss = loss/batch_size
-#                 len_data = len(self.dataloader)
-#                 print_loss_avg = epoch_loss_total / (batch_size*(batch+1))
-#                 print('Epoch %d %s (%.2f%%) %.4f acc_classes:%.4f acc_posses:%.4f' % (iter+1, timeSince(start, (batch+1) / (len(self.dataloader)//batch_size))
-#                                             , float((batch+1)) / (len(self.dataloader)//batch_size) * 100, print_loss_avg, batch_accuracy_classes, batch_accuracy_poses))
-#                 loss_total.backward()
-#                 self.encoder_optimizer.step()
-#                 self.decoder_optimizer.step()
-#
-#                 info = {
-#                     'batch_loss': loss_total.data[0],
-#                     'batch_accuracy_classes': batch_accuracy_classes,
-#                     'batch_accuracy_poses': batch_accuracy_poses.data[0],
-#                     'loss_poses': loss_poses.data[0],
-#                     'batch_loss': loss_total.data[0],
-#                 }
-#
-#                 for tag, value in info.items():
-#                     self.logger.scalar_summary(tag, value, iter*(len(self.dataloader)//batch_size)*batch_size+ batch )
-#
-#
-#             epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
-#             epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
-#
-#             print('Iteration %s (%d %f%%) %.4f avg: %.4f acc:%.4f' %
-#                   (timeSince(start, (iter+1) / n_iters),
-#                   (iter + 1), (iter+1) / float(n_iters) * 100, epoch_loss_total,
-#                    epoch_loss_total/(len(self.dataloader)//batch_size),epoch_accuracy_classes))
-#
-#             is_best = self.best_lost > epoch_loss_total
-#             if (self.best_lost > epoch_loss_total and save == True):
-#                 self.save_checkpoint({
-#                     'epoch': iter + 1,
-#                     'encoder_dict': self.encoder.state_dict(),
-#                     'decoder_dict': self.decoder.state_dict(),
-#                     'epoch_lost': epoch_loss_total,
-#                     'encoder_optimizer': self.encoder_optimizer.state_dict(),
-#                     'decoder_optimizer': self.decoder_optimizer.state_dict(),
-#                 }, is_best)
-#             if is_best:
-#                 self.best_lost = epoch_loss_total
-#
-#
-#             # if (iter % 1 == 0):
-#             #     self.dataset.shuffle_data()
-#             #     error = 0
-#             #     for i in range(int (len(self.dataset.list_data))-1):
-#             #         error += self.evaluate_check(self.dataset._max_length_laser)
-#             #     self.acc = 1- float(error)/((len(self.dataset.list_data))-1)
-#             info = {
-#                 'Epoch_loss':  epoch_loss_total/((len(self.dataloader)//batch_size)*batch_size),
-#                 'Epoch_accuracy_classes': epoch_accuracy_classes,
-#                 'Epoch_accuracy_poses': epoch_accuracy_poses.data[0],
-#                 'epoch_loss_classes': epoch_loss_classes/((len(self.dataloader)//batch_size)*batch_size),
-#                 'epoch_loss_poses': epoch_loss_poses/((len(self.dataloader)//batch_size)*batch_size)
-#             }
-#             for tag, value in info.items():
-#                 self.logger.scalar_summary(tag, value, iter + 1)
-#             print('acc: %f)' % epoch_accuracy_classes)
-#             self.prev_loss = self.loss
-#             self.loss = epoch_loss_total
-#
-#     def evaluate(self, training_pair,  max_length=MAX_LENGTH):
-#         input_variable = training_pair[0]
-#         input_length = input_variable.size()[0]
-#
-#         encoder_outputs = Variable(torch.zeros(max_length, self.encoder.hidden_size))
-#         encoder_outputs = encoder_outputs.cuda() if use_cuda else encoder_outputs
-#         encoder_hidden = self.encoder.initHidden()
-#         loss = 0
-#         for ei in range(input_length):
-#             encoder_output, encoder_hidden = self.encoder(
-#                 input_variable[ei], training_pair[1][ei], encoder_hidden)
-#             encoder_outputs[ei] = encoder_output[0][0]
-#
-#         decoder_input = Variable(torch.LongTensor([[SOS_token]]))
-#         decoder_input = decoder_input.cuda() if use_cuda else decoder_input
-#
-#         decoder_hidden = encoder_hidden
-#
-#         decoded_words = []
-#         decoder_attentions = torch.zeros(max_length, max_length)
-#
-#         # TODO: Run network and get result
-#
-#         return decoded_words
-#
-#     def evaluate_check(self, max_length=MAX_LENGTH):
-#         training_pair = self.dataset.next_pair()
-#         sentences = []
-#         expected_out = training_pair[2].data.cpu().numpy().reshape(-1)
-#         for word in expected_out:
-#             sentences.append(self.dataset.lang.index2word[word])
-#         sentences = sentences[0:-1]
-#         decoded_words = self.evaluate(training_pair, max_length)
-#
-#         output_sentence = ' '.join(decoded_words[0:-1])
-#         sentences = " ".join(sentences)
-#         if (output_sentence!=sentences):
-#             print("output: ", output_sentence)
-#             print("target: ", sentences)
-#             return 1
-#
-#         return 0
-#
-#

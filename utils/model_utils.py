@@ -30,13 +30,13 @@ class WordEncoding:
         predict = []
         target = []
         for index in range (len(class_info_list[0])):
-            if class_info_list[0][index] != 9:
+            if class_info_list[0][index] != self.classes["noting"]:
                 pose = ((pose_info_list.cpu().data[0][index])) * map_data.shape[1]
                 pose = pose.type(torch.IntTensor)
                 pose = tuple(pose)
                 predict.append((pose, self.get_class_char( class_info_list[0][index])))
                 cv.circle(backtorgb, pose , 5, (0,0,255))
-            if base_line_class[0][index] != 9:
+            if base_line_class[0][index] != self.classes["noting"]:
                 pose = (base_line_pose.cpu().data[0][index])  * map_data.shape[1]
                 pose = pose.type(torch.IntTensor)
                 pose = tuple(pose)
