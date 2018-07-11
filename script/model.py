@@ -98,7 +98,7 @@ class Network_Map(nn.Module):
         output_feature = input_size[1]
         self.resnet18 = models.resnet18(pretrained=True)
         self.resnet18 = nn.Sequential(*list(self.resnet18.children())[:-2])
-        print (self.resnet18)
+        # print (self.resnet18)
         self.len_parent = len_parent
         self.numb_of_prediction = num_of_prediction
         # self.conv1 = nn.Conv2d(self.input_size, 16, 6, padding=5)
@@ -195,7 +195,7 @@ class Map_Model:
             shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
 
     def __init__(self, dataset_train, dataset_validation, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False):
-
+        self.start = time.time()
         self.dataset = dataset_train
         self.dataset_validation = dataset_validation
         self.learning_rate = learning_rate
@@ -216,9 +216,9 @@ class Map_Model:
 
 
         # Model
-        self.weight_loss = torch.ones([len(self.dataset.word_encoding.classes)])
-        self.weight_loss[self.dataset.word_encoding.classes["noting"]] = 0.05  # nothing
-        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
+        # self.weight_loss = torch.ones([len(self.dataset.word_encoding.classes)])
+        # self.weight_loss[self.dataset.word_encoding.classes["noting"]] = 0.05  # nothing
+        self.criterion_classes = nn.NLLLoss()# weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
 
 
@@ -231,15 +231,15 @@ class Map_Model:
                 print("=> loading checkpoint '{}'".format(resume_path))
                 checkpoint = torch.load(resume_path)
                 self.start_epoch = checkpoint['epoch']
-                self.best_lost = checkpoint['epoch_lost']
+                # self.best_lost = checkpoint['epoch_lost']
                 self.model.load_state_dict(checkpoint['model_dict'])
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
+                # self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
                 print("=> no checkpoint found at '{}'".format(resume_path))
 
-    def model_forward(self, batch_size, mode, iter):
+    def model_forward(self, batch_size, mode, iter, plot=False):
         iter_data_loader = None
         dataset = None
         if mode == "train":
@@ -270,6 +270,10 @@ class Map_Model:
 
             topv, topi = output_classes.data.topk(1)
 
+            if plot:
+                out_classes = topi.view(word_encoded_class.shape)
+                dataset.word_encoding.visualize_map(local_map[:, 0], out_classes, output_poses, word_encoded_class,
+                                                         word_encoded_pose)
             b = word_encoded_class != dataset.word_encoding.classes["noting"]
             b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
             output_poses = output_poses * b
@@ -281,7 +285,9 @@ class Map_Model:
                     accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
                     index = int(word_encoded_class[i][j].cpu().data)
                     accuracy_each_class[index].append(accuracy)
-                    if word_encoded_class.data[i][j] != dataset.word_encoding.classes["noting"]:
+                    if word_encoded_class.data[i][j] == dataset.word_encoding.classes["noting"] and accuracy == 1:
+                        continue
+                    else:
                         batch_accuracy_classes.append(accuracy)
                         epoch_accuracy_classes.append(accuracy)
                         distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
@@ -379,13 +385,14 @@ class Map_Model:
             dataset = self.dataset_validation
         self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=10, batch_size=batch_size, drop_last=True)
 
-        epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "validation", iter)
+        epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
         print('validation loss: %.4f class_accuracy: %.4f pose_accuracy%.4f' %
               (epoch_loss_total / (len(self.dataset_validation) // batch_size), epoch_accuracy_classes, epoch_accuracy_poses))
 
         is_best = self.best_lost > epoch_loss_total
         print (is_best)
+
         if (save == True and plot == False):
             self.save_checkpoint({
                 'epoch': iter + 1,

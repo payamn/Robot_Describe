@@ -20,7 +20,7 @@ if __name__ == '__main__':
     my_model = Map_Model(map_dataset_train, map_dataset_validation,
                      resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'), "check_points/model_best.pth.tar") ,
                      save=True, load_weight=True)
-    # my_model.visualize_dataset()
+    # my_model.visualize_dataset(map_dataset_train)
     # exit(0)
 
     my_model.train_iters(1000, print_every=10, save=True, batch_size=batch_size)

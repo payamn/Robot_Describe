@@ -8,10 +8,10 @@ class WordEncoding:
     def __init__(self):
         self.sos = "[sos]"
         self.eos = "[eos]"
-        self.sentences = ["close_room", "open_room", "4_junction" ,"t_junction", "corner", "noting"]
+        self.sentences = ["close_room", "open_room", "4_junction" ,"t_junction", "corner"]
         classes = ["close_room", "open_room",
                         "corner_left", "corner_right",
-                        "t_junction_right_forward", "t_junction_right_left", "t_junction_left_forward", "t_junction", "4_junction", "noting"]
+                        "t_junction_right_forward", "t_junction_right_left", "t_junction_left_forward", "t_junction", "4_junction"]
 
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
@@ -34,13 +34,13 @@ class WordEncoding:
                 pose = ((pose_info_list.cpu().data[0][index])) * map_data.shape[1]
                 pose = pose.type(torch.IntTensor)
                 pose = tuple(pose)
-                predict.append((pose, self.get_class_char( class_info_list[0][index])))
+                predict.append((pose, self.get_class_char( class_info_list[0][index].item())))
                 cv.circle(backtorgb, pose , 5, (0,0,255))
             if base_line_class[0][index] != self.classes["noting"]:
                 pose = (base_line_pose.cpu().data[0][index])  * map_data.shape[1]
                 pose = pose.type(torch.IntTensor)
                 pose = tuple(pose)
-                target.append((pose, self.get_class_char( base_line_class[0][index])))
+                target.append((pose, self.get_class_char( base_line_class[0][index].item())))
                 cv.circle(backtorgb, pose , 4, (0,255,0))
         cv.imshow("map", backtorgb)
 
