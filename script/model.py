@@ -96,36 +96,17 @@ class Network_Map(nn.Module):
         super(Network_Map, self).__init__()
         self.input_size = input_size[0]
         output_feature = input_size[1]
-        self.resnet18 = models.resnet18(pretrained=True)
-        self.resnet18 = nn.Sequential(*list(self.resnet18.children())[:-2])
-        # print (self.resnet18)
-        self.len_parent = len_parent
+        resnet34 = models.resnet34(pretrained=True)
+        modules = list(resnet34.children())[:-3]
+        # for p in resnet152.parameters():
+        #     p.requires_grad = False
+        print (resnet34)
+        self.resnet34 = nn.Sequential(*modules)
+
+        print (self.resnet34)
+        self.conv2 = nn.Conv2d(256, 24, 5 )
+
         self.numb_of_prediction = num_of_prediction
-        # self.conv1 = nn.Conv2d(self.input_size, 16, 6, padding=5)
-        # self.conv2 = nn.Conv2d(16, 16, 5, stride=1, padding=4)
-        # self.conv3 = nn.Conv2d(16, 32, 4, stride=1, padding=3)
-        # self.conv4 = nn.Conv2d(32, 32, 3, stride=1, padding=1)
-        # self.conv5 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        # self.conv6 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        # self.relu1 = nn.ReLU()
-        # self.relu2 = nn.ReLU()
-        # self.relu3 = nn.ReLU()
-        # self.relu4 = nn.ReLU()
-        # self.relu5 = nn.ReLU()
-        # self.relu6 = nn.ReLU()
-        # for index in range (1, 5):
-        #     conv = self.__getattr__("conv" + index.__str__())
-        #
-        #     kernel_size = conv.kernel_size if type(conv.kernel_size) == tuple \
-        #         else (conv.kernel_size, conv.kernel_size)
-        #     padding = conv.padding if type(conv.padding) == tuple \
-        #         else (conv.padding, conv.padding)
-        #     stride = conv.stride if type(conv.stride) == tuple \
-        #         else (conv.stride, conv.stride)
-        #
-        #     output_feature = ((output_feature[0] - kernel_size[0] + 2 * padding[0]) // stride[0] + 1,
-        #                       (output_feature[1] - kernel_size[1] + 2 * padding[0]) // stride[1] + 1)
-        #     print('conv', index, ':', output_feature)
 
         self.output_size = output_size
         # self.linear = nn.Linear(output_feature[0]*output_feature[1]*32, 10*10)
@@ -133,32 +114,24 @@ class Network_Map(nn.Module):
         self.linear_classes = nn.Linear(25088, self.output_size * num_of_prediction)
         # self.linear_classes_parents = nn.Linear(512*4*4 , self.len_parent * num_of_prediction)
 
-        self.soft_max = nn.LogSoftmax(dim=3)
+        self.soft_max = nn.LogSoftmax(dim=4)
         self.tanh = nn.Tanh()
     def forward(self, map):
         batch_size = map.size()[0]
-        resnet = self.resnet18(map).view(batch_size, 1, -1)
-        # conv = self.relu1(self.conv1(map))
-        # conv = self.relu2(self.conv2(conv))
-        # conv = self.relu3(self.conv3(conv))
-        # conv = self.relu4(self.conv4(conv))
-        # conv = self.relu5(self.conv5(conv))
-        # conv = self.relu6(self.conv6(conv))
-        # print (conv4.data.shape)
-        # print (conv6.data.shape)
-        # exit(0)
+        resnet = self.resnet34(map)
+        predict = self.conv2(resnet).permute(0,2,3,1)
 
-        # linear = self.linear(conv.view(batch_size, 1, -1))
-        poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
-        # linear_class = torch.cat((poses_out.view(batch_size, 1, -1), linear), dim=2)
-        # parents_out = self.linear_classes_parents(resnet)
-        # parents_out = self.soft_max(parents_out.view(batch_size, 1, self.numb_of_prediction, self.len_parent))
-        poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
-        # classes_out = torch.cat((parents_out.view(batch_size, self.numb_of_prediction, self.len_parent), poses_out),2).view(batch_size, 1, -1)
-        # classes_out = torch.cat((classes_out, resnet), 2)
-        classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
-        classes_out = self.soft_max(classes_out.view(batch_size, 1, self.numb_of_prediction, self.output_size))
-        return poses_out, classes_out
+        # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
+        predict = predict.view(batch_size, 10, 10, 2, 12)
+        # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
+        # poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
+        # classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
+        # classes_out = self.soft_max(classes_out.view(batch_size, 1, self.numb_of_prediction, self.output_size))
+        classes_out = self.soft_max(predict[:,:,:,:,3:])
+        poses = predict[:, :, :, :, 1:3]
+        objectness = predict[:, :, :, :, 0]
+        # return poses_out, classes_out
+        return classes_out, poses, objectness
 
 
 class DecoderNoRNN(nn.Module):
@@ -255,74 +228,78 @@ class Map_Model:
         epoch_accuracy_classes = []
         epoch_accuracy_poses = []
         accuracy_each_class = {i: [] for i in range(len(dataset.word_encoding.classes))}
-        for batch, (word_encoded_class, word_encoded_pose, local_map) in enumerate(iter_data_loader):
+        for batch, (target_classes, target_poses, target_objectness, local_map) in enumerate(iter_data_loader):
             loss_classes = 0
             loss_poses = 0
             self.optimizer.zero_grad()
             batch_accuracy_classes = []
             batch_accuracy_poses = []
             local_map = Variable(local_map).cuda() if use_cuda else Variable(local_map)
-            word_encoded_class = Variable(word_encoded_class).cuda() if use_cuda else Variable(word_encoded_class)
-            # word_encoded_class_parent = Variable(word_encoded_class_parent).cuda() if use_cuda else Variable(word_encoded_class_parent)
-            word_encoded_pose = self.calculate_encoded_pose(word_encoded_pose)
+            target_classes = Variable(target_classes).cuda() if use_cuda else Variable(target_classes)
+            target_poses = Variable(target_poses).cuda() if use_cuda else Variable(target_poses)
+            target_objectness = Variable(target_objectness).cuda() if use_cuda else Variable(target_objectness)
 
-            output_poses, output_classes = self.model(local_map)
+            classes_out, poses, objectness = self.model(local_map)
 
-            topv, topi = output_classes.data.topk(1)
+            topv, topi = classes_out.data.topk(1)
 
-            if plot:
-                out_classes = topi.view(word_encoded_class.shape)
-                dataset.word_encoding.visualize_map(local_map[:, 0], out_classes, output_poses, word_encoded_class,
-                                                         word_encoded_pose)
-            b = word_encoded_class != dataset.word_encoding.classes["noting"]
-            b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
-            output_poses = output_poses * b
-            word_encoded_pose = word_encoded_pose * b
+            # if plot:
+            #     out_classes = topi.view(word_encoded_class.shape)
+            #     dataset.word_encoding.visualize_map(local_map[:, 0], out_classes, output_poses, word_encoded_class,
+            #                                              word_encoded_pose)
+            # b = word_encoded_class != dataset.word_encoding.classes["noting"]
+            # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
+            # output_poses = output_poses * b
+            # word_encoded_pose = word_encoded_pose * b
 
             accuracy = 0
-            for i in range(word_encoded_class.size(0)):
-                for j in range(dataset.prediction_number):
-                    accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
-                    index = int(word_encoded_class[i][j].cpu().data)
-                    accuracy_each_class[index].append(accuracy)
-                    if word_encoded_class.data[i][j] == dataset.word_encoding.classes["noting"] and accuracy == 1:
-                        continue
-                    else:
-                        batch_accuracy_classes.append(accuracy)
-                        epoch_accuracy_classes.append(accuracy)
-                        distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
-                        # distance = distance.squeeze(1)
-                        # accuracy_poses = torch.mean(distance)
-                        batch_accuracy_poses.append(distance.item())
-                        epoch_accuracy_poses.append(distance.item())
-            output_classes = output_classes.permute(0, 3, 1, 2)
+            acc = topi== target_classes
+            acc = float(torch.sum(acc))/np.prod(acc.shape)
+            epoch_accuracy_classes.append(acc)
+            # for batch in range(batch_size):
+            #     for j in range(dataset.prediction_number):
+            #         accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
+            #         index = int(word_encoded_class[i][j].cpu().data)
+            #         accuracy_each_class[index].append(accuracy)
+            #         if word_encoded_class.data[i][j] == dataset.word_encoding.classes["noting"] and accuracy == 1:
+            #             continue
+            #         else:
+            #             batch_accuracy_classes.append(accuracy)
+            #             epoch_accuracy_classes.append(accuracy)
+            #             distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
+            #             # distance = distance.squeeze(1)
+            #             # accuracy_poses = torch.mean(distance)
+            #             batch_accuracy_poses.append(distance.item())
+            #             epoch_accuracy_poses.append(distance.item())
+            # output_classes = output_classes.permute(0, 3, 1, 2)
             # output_classes_parent = output_classes_parent.permute(0,3,1,2)
-            word_encoded_class = word_encoded_class.unsqueeze(1)
+            # word_encoded_class = word_encoded_class.unsqueeze(1)
             # word_encoded_class_parent = word_encoded_class_parent.unsqueeze(1)
             # output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
             # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
             # word_encoded_class = word_encoded_class.squeeze(0)
 
             # for i in range (output_classes.size(1)):
+            classes_out = classes_out.permute(0, 4, 1, 2, 3)
+            target_classes = target_classes.permute(0, 4, 1, 2, 3).squeeze(1)
             landa_class = 1
-            loss_classes += landa_class * self.criterion_classes(output_classes, word_encoded_class)  # +\
+            loss_classes += landa_class * self.criterion_classes(classes_out, target_classes)  # +\
             # (1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
 
-            loss_poses += self.criterion_poses(output_poses, word_encoded_pose)
+            loss_poses += self.criterion_poses(poses, target_poses)
             landa = 1.0 / 4
             loss_total = landa * loss_poses + (1 - landa) * loss_classes
 
-            epoch_loss_classes += loss_classes.item() / word_encoded_class.size()[0]
-            epoch_loss_poses += loss_poses.item() / word_encoded_class.size()[0]
+            epoch_loss_classes += loss_classes.item() / classes_out.size()[0]
+            epoch_loss_poses += loss_poses.item() / classes_out.size()[0]
             epoch_loss_total += epoch_loss_classes + epoch_loss_poses
-            batch_accuracy_classes = np.mean(batch_accuracy_classes)
-            batch_accuracy_poses = np.mean(batch_accuracy_poses)
+            # batch_accuracy_classes = np.mean(batch_accuracy_classes)
+            # batch_accuracy_poses = np.mean(batch_accuracy_poses)
             # loss = loss/batch_size
             print_loss_avg = epoch_loss_total / (batch_size * (batch + 1))
-            print(mode+' Epoch %d %s (%.2f%%) %.4f acc_classes:%.4f acc_posses:%.4f' % (
+            print(mode+' Epoch %d %s (%.2f%%) %.4f acc_classes:%.4f' % (
             iter + 1, timeSince(self.start, (batch + 1) / (len(dataset) // batch_size))
-            , float((batch + 1)) / (len(dataset) // batch_size) * 100, print_loss_avg, batch_accuracy_classes,
-            batch_accuracy_poses))
+            , float((batch + 1)) / (len(dataset) // batch_size) * 100, print_loss_avg, acc))
 
             if mode== "train":
                 loss_total.backward()
@@ -330,8 +307,8 @@ class Map_Model:
 
             info = {
                 'batch_loss'+mode: loss_total.item(),
-                'batch_accuracy_classes'+mode: batch_accuracy_classes,
-                'batch_accuracy_poses'+mode: batch_accuracy_poses,
+                'batch_accuracy_classes'+mode: acc,
+                # 'batch_accuracy_poses'+mode: batch_accuracy_poses,
                 'loss_poses'+mode: loss_poses.item(),
                 'batch_loss'+mode: loss_total.item(),
             }
@@ -339,12 +316,12 @@ class Map_Model:
             for tag, value in info.items():
                 self.logger.scalar_summary(tag, value, iter * (len(dataset) // batch_size) + batch)
         epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
-        epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
+        # epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
 
         info = {
             'Epoch_loss_'+mode: epoch_loss_total / ((len(dataset) // batch_size) * batch_size),
             'Epoch_accuracy_classes_'+mode: epoch_accuracy_classes,
-            'Epoch_accuracy_poses_'+mode: epoch_accuracy_poses,
+            # 'Epoch_accuracy_poses_'+mode: epoch_accuracy_poses,
             'epoch_loss_classes_'+mode: epoch_loss_classes / ((len(dataset) // batch_size) * batch_size),
             'epoch_loss_poses_'+mode: epoch_loss_poses / ((len(dataset) // batch_size) * batch_size)
         }
@@ -353,7 +330,7 @@ class Map_Model:
 
         for tag, value in info.items():
             self.logger.scalar_summary(tag, value, iter + 1)
-        return epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total
+        return epoch_accuracy_classes, epoch_loss_total
 
 
 
@@ -385,10 +362,10 @@ class Map_Model:
             dataset = self.dataset_validation
         self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=10, batch_size=batch_size, drop_last=True)
 
-        epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
+        epoch_accuracy_classes, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
-        print('validation loss: %.4f class_accuracy: %.4f pose_accuracy%.4f' %
-              (epoch_loss_total / (len(self.dataset_validation) // batch_size), epoch_accuracy_classes, epoch_accuracy_poses))
+        print('validation loss: %.4f class_accuracy: %.4f' %
+              (epoch_loss_total / (len(self.dataset_validation) // batch_size), epoch_accuracy_classes))
 
         is_best = self.best_lost > epoch_loss_total
         print (is_best)
@@ -414,7 +391,7 @@ class Map_Model:
 
         for iter in range(self.start_epoch, n_iters):
 
-            epoch_accuracy_classes, epoch_accuracy_poses, epoch_loss_total = self.model_forward(batch_size, "train", iter)
+            epoch_accuracy_classes, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             print('Iteration %s (%d %f%%) %.4f avg: %.4f acc:%.4f' %
                   (timeSince(self.start, (iter+1) / n_iters),
                   (iter + 1), (iter+1) / float(n_iters) * 100, epoch_loss_total,

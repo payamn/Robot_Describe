@@ -12,7 +12,7 @@ from utils.model_utils import WordEncoding
 from torch.autograd import Variable
 
 if __name__ == '__main__':
-    batch_size = 100
+    batch_size = 30
     # rospy.init_node('listener', anonymous=True)
     map_dataset_train = Map_Dataset(os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "train"))
     map_dataset_validation = Map_Dataset(os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))

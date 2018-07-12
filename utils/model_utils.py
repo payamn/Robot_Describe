@@ -52,11 +52,15 @@ class WordEncoding:
         cv.waitKey()
         # plt.show()
 
+
     def get_object_class(self, object):
         if object[1] in self.classes:
-            return self.classes[object[1]], object[2]
+            prefer_anchor = 1
+            if "room" in object[1]:
+                prefer_anchor = 0
+            return self.classes[object[1]], object[2], prefer_anchor
         else:
-            print object
+            print object, 0
             print ("set_objcet_class class not found skiping")
 
     def get_class_char(self, class_label):

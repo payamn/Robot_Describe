@@ -16,6 +16,7 @@ import tf
 from tf import TransformListener
 import numpy as np
 import threading
+import constants
 import rospkg
 from utility import *
 import pickle
@@ -73,23 +74,42 @@ class Map_Dataset(Dataset):
             except ValueError:
                 print (self.files[i])
                 exit(0)
-            language = dic_data["language"] if len(dic_data["language"]) > 0 else [(-1, "noting", (0, 0))]
+            language = dic_data["language"]
             word_encoded = list(map(self.word_encoding.get_object_class, language))
-            for index in range(self.prediction_number - len(word_encoded)):
-                word_encoded.append((self.word_encoding.classes["noting"], (0, 0)))
-            word_encoded_class, word_encoded_pose = zip(*word_encoded)
+            word_encoded = [(x[0], (x[1][0]/constants.LOCAL_MAP_DIM*10, (x[1][1]/constants.LOCAL_MAP_DIM+0.5) * 10), x[2]) for x in word_encoded ]
+
+            # width , height, two anchors, objectness + (x, y) + classes
+            target = torch.zeros([10, 10, 2, 4], dtype=torch.float)
+
+            for word in word_encoded:
+
+                # center of object in tile
+                x_center = word[1][0]%1
+                y_center = word[1][1]%1
+
+                # x,y coordinate in gridded map
+                x = int(math.floor(word[1][0]))
+                y = int(math.floor(word[1][1]))
+
+                # objectness
+                target[x][y][word[2]][0] = 1
+
+                # x_center , y_center
+                target[x][y][word[2]][1] = x_center
+                target[x][y][word[2]][2] = y_center
+
+                # class
+                target[x][y][word[2]][3] = word[0]
+
+            target_classes = target[ :, :, :, 3:]
+            target_poses = target[ :, :, :, 1:3]
+            target_objectness = target[ :, :, :, 0]
+
             local_maps = dic_data["local_maps"]
             local_maps = cv2.resize(local_maps, (224, 224))
             local_maps = torch.from_numpy(np.stack([local_maps, local_maps, local_maps])).type(torch.FloatTensor)
-            word_encoded_pose = [x for x in enumerate(word_encoded_pose)]
-            word_encoded_pose.sort(key=lambda l: (l[1][0], l[1][1]))
-            word_encoded_class = [word_encoded_class[word_encoded_pose[x][0]] for x in range(len(word_encoded_class))]
-            #word_encoded_class_parent = [self.word_encoding.get_parent_class(word_class) for word_class in word_encoded_class]
-            word_encoded_pose = [x[1] for x in word_encoded_pose]
-            word_encoded_pose = torch.FloatTensor(word_encoded_pose)
-            word_encoded_class = torch.LongTensor(word_encoded_class)
-            #word_encoded_class_parent = torch.LongTensor(word_encoded_class_parent)
-        return word_encoded_class, word_encoded_pose, local_maps
+
+        return target_classes.type(torch.LongTensor), target_poses, target_objectness, local_maps
 
 
 
