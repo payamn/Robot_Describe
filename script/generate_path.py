@@ -42,7 +42,8 @@ class GeneratePath:
         self.counter = 0
         self.map = {}
         self.positions = []
-
+        if not os.path.isdir(pickle_dir):
+            os.makedirs(pickle_dir)
         files = [f for f in os.listdir(pickle_dir) if os.path.isfile(os.path.join(pickle_dir, f))]
         files = sorted(files, key=lambda file: int(file.split('.')[0]))
         files = [os.path.join(pickle_dir, f) for f in files]
@@ -157,11 +158,13 @@ class GeneratePath:
 
 
 if __name__ == '__main__':
-    is_write = False
+    # if True, robot should move in map to generate points then by changing it to false it will move the robot along the path
+    is_generate_path = True
 
     pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
+
     generate_path = GeneratePath(pickle_dir)
-    if is_write:
+    if is_generate_path:
         if not os.path.isdir(pickle_dir):
             os.makedirs(pickle_dir)
         generate_path.write_to_pickle()

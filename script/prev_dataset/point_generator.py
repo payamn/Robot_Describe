@@ -13,7 +13,7 @@ from tf import TransformListener
 import numpy as np
 import threading
 import rospkg
-from utility import *
+from script.utility import *
 import pickle
 import math
 from utils.configs import *
@@ -23,7 +23,7 @@ use_full_sentences = ["room on right side", "room on left side","T junction", "C
 index_senteces = 0
 points_description = []
 
-from robot import *
+# from robot import *
 tf_listner = None
 diff_to_save_laser = 8
 prev_points = [[0,0] for x in range (5)]

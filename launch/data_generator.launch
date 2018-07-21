@@ -2,10 +2,11 @@
 	<arg name="base_frame" default="base_link" />
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
 	<arg name="odom_frame" default="odom" />
+	<arg name="transform_pose" default="-90.0 -26.500" />
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
-	<arg name="map_name" default="real_2" />
+	<arg name="map_name" default="combine" />
 
 	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
@@ -40,8 +41,8 @@
 		args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="screen">
 		<param name="frame_id" value="map_server" />
 	</node>
-	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="-30.15 -26.5 0 0 0 0 -1  $(arg odom_frame) map_server 20" />
-	<!--<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="30.15 26.5 0 0 0 0 -1 gmap $(arg odom_frame) 100" />-->
+	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="$(arg transform_pose) 0 0 0 0 -1  $(arg odom_frame) map_server 20" />
+	<!--<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="-30.15 -26.5 0 0 0 0 -1 gmap $(arg odom_frame) 100" />-->
 
 	<!--<include file="$(find robot_describe)/launch/amcl.launch">-->
 		<!--<remap from="scan" to="base_scan"/>-->
@@ -58,7 +59,7 @@
 
 	<!--Commented for test-->
 
-	<include file="$(find robot_describe)/config_nav/move_base_flex.xml" />
+	<include file="$(find robot_describe)/launch/move_base_flex.launch" />
 	<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
 
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" />

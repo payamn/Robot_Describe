@@ -24,6 +24,8 @@ import tf
 from tf import TransformListener
 import numpy as np
 
+import os
+
 import threading
 import subprocess
 
@@ -126,8 +128,8 @@ class GenerateMap:
 
         angle = math.atan2(coordinate_next[1] - coordinate[1], coordinate_next[0] - coordinate[0])
 
-        pose.position.x = coordinate[0] - 30.15
-        pose.position.y = coordinate[1] - 26.5
+        pose.position.x = coordinate[0] + X_OFFSET
+        pose.position.y = coordinate[1] + Y_OFFSET
         pose.position.z = 0
         pose.orientation.w = angle
 
@@ -455,6 +457,14 @@ class GenerateMap:
 
                 # if we are stuck
                 if counter_to_reset <= 0:
+                    # check if move base flex died
+                    nodes = os.popen('rosnode list').read().split()
+                    if "/move_base_flex" not in nodes:
+                        # start move base flex node
+                        p = subprocess.Popen("roslaunch robot_describe move_base_flex.launch", stdout=None, shell=True)
+                        (output, err) = p.communicate()
+                        p.wait()
+                        print ("move base flex launch again because it was died unexpectedly")
                     break
             self.is_init = False
             time.sleep(0.1)
@@ -560,7 +570,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=1850)
+    generate_map = GenerateMap(start_pickle=1126)
 
     if args.generate_point:
         generate_map.write_to_pickle()

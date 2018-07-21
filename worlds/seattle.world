@@ -18,8 +18,8 @@ resolution 0.02
 window
 (
   size [ 3742 2124] # in pixels
-  scale 50.545  # pixels per meter
-  center [ -2.554  -4.898]
+  scale 37.975  # pixels per meter
+  center [ 6.348  0.067]
   rotate [ 0.000  0.000 ]
 
   show_data 1              # 1=on 0=off
@@ -28,10 +28,10 @@ window
 # load an environment bitmap
 floorplan
 (
-  name "read_1"
-  size [70.000 26.400 0.800]
+  name "seattle"
+  size [80.0 20.200 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "real_1.png"
+  bitmap "seattle.png"
 )
 define c intersection
 (
@@ -67,20 +67,10 @@ pioneer2dx_base_no_sonar
   color "red"
   # can refer to the robot by this name
   name "r0"
-  pose [ -13.689 5.596 0.000 77.151 ]
+  pose [ -18.616 1.639 0.000 169.762 ]
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] )
   localization "gps"
   localization_origin [ 0 0 0 0 ]
 )
 
-
-window
-(
-  size [ 461 174 ] # in pixels
-  scale 10   # pixels per meter
-  center [ 0.0  -0.0 ]
-  rotate [ 0.000  0.000 ]
-
-  show_data 1              # 1=on 0=off
-)
 

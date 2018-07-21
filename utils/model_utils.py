@@ -22,36 +22,45 @@ class WordEncoding:
     # def get_parent_class(self, idx):
     #     return self.parent_class_dic[idx]
 
-    def visualize_map(self, map_data, class_info_list, pose_info_list, base_line_class, base_line_pose):
+    def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes, target_poses, target_objectness):
         print "\n\n"
-        base_line_class = base_line_class.cpu().data
-        map_data = np.reshape(map_data.cpu().data.numpy(), (map_data.shape[1], map_data.shape[2], 1))
-        backtorgb = cv.cvtColor(map_data, cv.COLOR_GRAY2RGB)
-        predict = []
-        target = []
-        for index in range (len(class_info_list[0])):
-            if class_info_list[0][index] != self.classes["noting"]:
-                pose = ((pose_info_list.cpu().data[0][index])) * map_data.shape[1]
-                pose = pose.type(torch.IntTensor)
-                pose = tuple(pose)
-                predict.append((pose, self.get_class_char( class_info_list[0][index].item())))
-                cv.circle(backtorgb, pose , 5, (0,0,255))
-            if base_line_class[0][index] != self.classes["noting"]:
-                pose = (base_line_pose.cpu().data[0][index])  * map_data.shape[1]
-                pose = pose.type(torch.IntTensor)
-                pose = tuple(pose)
-                target.append((pose, self.get_class_char( base_line_class[0][index].item())))
-                cv.circle(backtorgb, pose , 4, (0,255,0))
-        cv.imshow("map", backtorgb)
+        for batch in range(target_classes.shape[0]):
+            predict = []
+            target = []
+            # map_data = np.reshape(map_data[batch].cpu().data.numpy(),(map_data.shape[1], map_data.shape[2], 1))
+            backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
+            backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
 
-        print ("predict:")
-        print predict
-        print ("target")
-        print target
-        print ("finished")
-        cv.waitKey()
-        # plt.show()
+            for x in range (target_classes.shape[1]):
+                for y in range (target_classes.shape[2]):
+                    for anchor in range(target_classes.shape[3]):
+                        if (target_objectness[batch][x][y][anchor].item()>= 0.3):
+                            pose = ((target_poses[batch][x][y][anchor].cpu().numpy()))
+                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
+                            pose = pose.astype(int)
+                            pose = tuple(pose)
+                            target.append((pose, self.get_class_char(target_classes[batch][x][y][anchor].item())))
+                            cv.circle(backtorgb, pose, 5, (0, 0, 255))
+                            cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
+                        if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
+                            pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
+                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
+                            pose = pose.astype(int)
+                            pose = tuple(pose)
+                            predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
+                            cv.circle(backtorgb, pose, 4, (255, 0, 100))
+                            cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+
+            cv.imshow("map", backtorgb)
+            print ("predict:")
+            print predict
+            print ("target")
+            print target
+            cv.imshow("laser map", backtorgb_laser)
+            cv.waitKey()
+
+            plt.show()
 
     def get_object_class(self, object):
         if object[1] in self.classes:
@@ -68,3 +77,28 @@ class WordEncoding:
             return self.classes_labels[class_label]
         else:
             return -1
+
+def laser_to_map(laser_array, fov, dest_size, max_range_laser):
+
+    fov = float(fov)
+    degree_steps = fov/len(laser_array)
+    map = np.zeros((dest_size, dest_size, 1))
+    to_map_coordinates = float(dest_size)/8.0
+    lasers = [((len(laser_array)/2-index)*degree_steps, x) for index, x in enumerate(laser_array)]
+
+    for laser in lasers:
+        x = laser[1] * np.cos(laser[0]/180*np.pi) * max_range_laser
+        y = laser[1] * np.sin(laser[0]/180*np.pi) * max_range_laser
+
+        x = x * to_map_coordinates
+        y = (-y + 8.0/2.)* to_map_coordinates
+
+        if x >= dest_size or y >= dest_size or x<0 or y<0:
+            continue
+        cv.circle(map, (int(x), int(y)), 3, 255, -1);
+
+        map[int(y), int(x),0] = 255
+    # backtorgb = cv.cvtColor(map, cv.COLOR_GRAY2RGB)
+
+
+    return map
