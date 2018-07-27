@@ -1,7 +1,6 @@
-MAP_NAME = "combine"
-X_OFFSET = -90.0
-Y_OFFSET =  -26.500
-
+MAP_NAME = "combinenormal"
+X_OFFSET = -67.5
+Y_OFFSET =  -19.875
 
 """
 To Run the code for new map:

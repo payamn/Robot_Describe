@@ -408,8 +408,8 @@ class GenerateMap:
                 print ("{} short range remaining".format(short_range))
             elif long_range>0:
                 long_range -= 1
-                start_index = random.randint(0, len(self.coordinates) - 300)
-                end_index = random.randint(start_index + 100, len(self.coordinates) - 2)
+                start_index = random.randint(0, len(self.coordinates) - 400)
+                end_index = random.randint(start_index + 200, len(self.coordinates) - 2)
                 print ("{} long range remaining".format(long_range))
             else:
                 print ("finished all for this map")
@@ -570,7 +570,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=1126)
+    generate_map = GenerateMap(start_pickle=5900)
 
     if args.generate_point:
         generate_map.write_to_pickle()

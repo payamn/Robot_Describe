@@ -384,7 +384,7 @@ class Map_Model:
 
 
             loss_objectness = self.criterion_objectness(objectness, target_objectness)
-            loss_total = (2*loss_classes+loss_poses + 100*loss_objectness)/103
+            loss_total = (130*loss_classes+loss_poses + 100*loss_objectness)/231
 
             epoch_loss_classes += loss_classes.item() / classes_out.size()[0]
             epoch_loss_poses += loss_poses.item() / classes_out.size()[0]
