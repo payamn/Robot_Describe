@@ -38,12 +38,14 @@ from utils import model_utils
 from utils.configs import *
 
 class GenerateMap:
-    def __init__(self, start_pickle = 0):
+    def __init__(self, start_pickle = 0, is_online=False):
+        print ("in generate map")
         self.is_init = False
         points = []
         rospy.init_node('GenerateMap')
         self.prev_points = [([0, 0],0 )for x in range(10)]
         self.index_prev_points = 0
+        self.new_data_ready = False
         self.points_description = []
         self.tf_listner = TransformListener()
         self.word_encoding = model_utils.WordEncoding()
@@ -77,6 +79,8 @@ class GenerateMap:
         self.img_sub = None
         self.MIN_DISTANCE_TO_PUBLISH = 5
         self.MAX_DISTANCE_TO_PUBLISH = 7
+
+        self.is_online = is_online
 
         self.bridge = CvBridge()
 
@@ -161,12 +165,15 @@ class GenerateMap:
         p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
         rospy.wait_for_service('/cost_map_node/map_info')
         time.sleep(0.5)
+        self.init_map()
+    
+    def init_map(self):
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
         print ("gmapping reset")
         time.sleep(0.5)
 
-        self.is_init = True
+        self.is_init = True    
 
     def get_local_map(self, annotated_publish=True):
         self.get_map_info()
@@ -201,12 +208,20 @@ class GenerateMap:
             self.image_pub_annotated.publish(self.bridge.cv2_to_imgmsg(image))
 
 
+    def get_data(self):
+        self.new_data_ready = False
+        return self.language, self.laser_data, self.local_map
 
 
     def save_pickle(self):
         if not self.is_init or self.laser_data is None or self.local_map is None \
                 or self.language is None or self.current_speed is None:
             return
+        if self.is_online:
+            self.new_data_ready = True
+            print ("new data")
+            return
+
         # lasers = []
         # speeds = []
         # local_maps = []
@@ -263,6 +278,7 @@ class GenerateMap:
         # self.add_data(laser_data)
 
     def callback_map_image(self, image):
+        print ("in call back image")
         if not self.is_init:
             return
         try:
@@ -276,6 +292,8 @@ class GenerateMap:
         map_array = Utility.normalize(cv_image)
         self.map["data"] = map_array
         # print ("local map updated")
+        print ("get local map")
+
         self.get_local_map()
         self.save_pickle()
         # print ("local map called")
@@ -340,9 +358,11 @@ class GenerateMap:
 
 
     def read_from_pickle(self):
+        print ("!!!!!read from pickle")
+
         while not self.is_init:
             time.sleep(0.1)
-
+        print ("read from pickle")
         self.points_description = pickle.load(
             open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
         position_points = [[i[0].x, i[0].y] for i in self.points_description]
