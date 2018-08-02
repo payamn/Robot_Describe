@@ -22,6 +22,8 @@ import sys
 from logger import Logger
 import torchvision.models as models
 
+from utils import model_utils
+
 from torch.utils.data import DataLoader
 
 SOS_token = 0
@@ -195,10 +197,11 @@ class Map_Model:
         if is_best:
             shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
 
-    def __init__(self, dataset_train, dataset_validation, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None):
+    def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None):
         self.start = time.time()
         self.dataset = dataset_train
         self.dataset_validation = dataset_validation
+        self.word_encoding = model_utils.WordEncoding()
         self.learning_rate = learning_rate
         self.best_lost = sys.float_info.max
         self.distance = nn.PairwiseDistance()
@@ -216,7 +219,7 @@ class Map_Model:
         else:
             print ("log is off")
             self.logger = None
-        self.model = Network_Map((1,(244,244)), self.dataset.word_encoding.len_classes())
+        self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
         if self.use_cuda:
             self.model = self.model.cuda()
 
@@ -226,8 +229,8 @@ class Map_Model:
 
 
         # Model
-        # self.weight_loss = torch.ones([len(self.dataset.word_encoding.classes)])
-        # self.weight_loss[self.dataset.word_encoding.classes["noting"]] = 0.05  # nothing
+        # self.weight_loss = torch.ones([len(self.word_encoding.classes)])
+        # self.weight_loss[self.word_encoding.classes["noting"]] = 0.05  # nothing
         self.criterion_classes = nn.NLLLoss()# weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
@@ -274,7 +277,7 @@ class Map_Model:
         epoch_accuracy_classes = []
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
-        accuracy_each_class = {i: [] for i in range(len(dataset.word_encoding.classes))}
+        accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
         for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
             loss_classes = 0
             loss_poses = 0
@@ -293,9 +296,9 @@ class Map_Model:
             topv, topi = classes_out.data.topk(1)
 
             if plot:
-                dataset.word_encoding.visualize_map(local_map[:,0,:,:], laser_map[:,0,:,:], topi, poses, objectness,
+                self.word_encoding.visualize_map(local_map[:,0,:,:], laser_map[:,0,:,:], topi, poses, objectness,
                                                     target_classes, target_poses, target_objectness)
-            # b = word_encoded_class != dataset.word_encoding.classes["noting"]
+            # b = word_encoded_class != self.word_encoding.classes["noting"]
             # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
             # output_poses = output_poses * b
             # word_encoded_pose = word_encoded_pose * b
@@ -333,7 +336,7 @@ class Map_Model:
             #         accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
             #         index = int(word_encoded_class[i][j].cpu().data)
             #         accuracy_each_class[index].append(accuracy)
-            #         if word_encoded_class.data[i][j] == dataset.word_encoding.classes["noting"] and accuracy == 1:
+            #         if word_encoded_class.data[i][j] == self.word_encoding.classes["noting"] and accuracy == 1:
             #             continue
             #         else:
             #             batch_accuracy_classes.append(accuracy)
@@ -428,8 +431,8 @@ class Map_Model:
                 'epoch_loss_classes_'+mode: epoch_loss_classes / len(dataloader),
                 'epoch_loss_poses_'+mode: epoch_loss_poses / len(dataloader)
             }
-            for i in range(len(dataset.word_encoding.classes)):
-                info["Epoch_" + mode + "_" + dataset.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
+            for i in range(len(self.word_encoding.classes)):
+                info["Epoch_" + mode + "_" + self.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
 
             for tag, value in info.items():
                 self.logger.scalar_summary(tag, value, iter + 1)

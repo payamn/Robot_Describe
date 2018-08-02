@@ -1,8 +1,17 @@
 import cv2 as cv
+from cv_bridge import CvBridge
 import numpy as np
 import matplotlib.pyplot as plt
+
+from script.utility import Utility
+from script import constants
+
 import torch
 
+from nav_msgs.srv import GetMap
+import rospy
+
+import time
 
 class WordEncoding:
     def __init__(self):
@@ -22,20 +31,20 @@ class WordEncoding:
     # def get_parent_class(self, idx):
     #     return self.parent_class_dic[idx]
 
-    def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes, target_poses, target_objectness):
+    def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes=None, target_poses=None, target_objectness=None):
         print "\n\n"
-        for batch in range(target_classes.shape[0]):
+        for batch in range(predict_classes.shape[0]):
             predict = []
             target = []
             # map_data = np.reshape(map_data[batch].cpu().data.numpy(),(map_data.shape[1], map_data.shape[2], 1))
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
 
-            for x in range (target_classes.shape[1]):
-                for y in range (target_classes.shape[2]):
-                    for anchor in range(target_classes.shape[3]):
-                        if (target_objectness[batch][x][y][anchor].item()>= 0.3):
-                            pose = ((target_poses[batch][x][y][anchor].cpu().numpy()))
+            for x in range (predict_classes.shape[1]):
+                for y in range (predict_classes.shape[2]):
+                    for anchor in range(predict_classes.shape[3]):
+                        if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
+                            pose = (target_poses[batch][x][y][anchor].cpu().numpy())
                             pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
                             pose = pose.astype(int)
                             pose = tuple(pose)
@@ -78,8 +87,8 @@ class WordEncoding:
         else:
             return -1
 
-def laser_to_map(laser_array, fov, dest_size, max_range_laser):
 
+def laser_to_map(laser_array, fov, dest_size, max_range_laser):
     fov = float(fov)
     degree_steps = fov/len(laser_array)
     map = np.zeros((dest_size, dest_size, 1))
@@ -99,6 +108,72 @@ def laser_to_map(laser_array, fov, dest_size, max_range_laser):
 
         map[int(y), int(x),0] = 255
     # backtorgb = cv.cvtColor(map, cv.COLOR_GRAY2RGB)
-
-
     return map
+
+
+def get_map_info():
+    rospy.wait_for_service('/cost_map_node/map_info')
+    try:
+        map_info_service = rospy.ServiceProxy('/cost_map_node/map_info', GetMap)
+        start_time = time.time()
+        map_info = map_info_service()
+        # print("get map --- %s seconds ---" % (time.time() - start_time))
+        return map_info.map.info
+        # print "map_info set"
+    except rospy.ServiceException, e:
+        print "Service call failed: %s" % e
+
+
+def get_map():
+    rospy.wait_for_service('/static_map')
+    try:
+        map_service = rospy.ServiceProxy('/static_map', GetMap)
+        start_time = time.time()
+        map = map_service()
+        # print("get map --- %s seconds ---" % (time.time() - start_time))
+        map_array = np.array(map.map.data).reshape((map.map.info.height, map.map.info.width))
+        map_array = Utility.normalize(map_array)
+        return map_array, map
+    except rospy.ServiceException, e:
+        print "Service call failed: %s" % e
+
+def get_local_map(
+        map_info, map_data, language=None, image_publisher=None, image_publisher_annotated=None, map_topic_name="map", dilate=False):
+
+    position, quaternion = Utility.get_robot_pose(map_topic_name)
+    plus_x = map_info.origin.position.y * map_info.resolution
+    plus_y = map_info.origin.position.x * map_info.resolution
+    position[0] -= map_info.origin.position.x  # * map_info.resolution
+    position[1] -= map_info.origin.position.y  # * map_info.resolution
+
+    _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
+                                                quaternion[2], quaternion[3])
+
+    image = Utility.sub_image(map_data, map_info.resolution, (position[0], position[1]), z,
+                              constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True, dilate=dilate)
+
+    if image_publisher:
+        image_publisher.publish(CvBridge().cv2_to_imgmsg(image))
+    local_map = image.copy()
+
+    if image_publisher_annotated is not None and language is not None:
+        for visible in language:
+            x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
+            y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
+            space = 45
+            if visible[1] == 'close_room':
+                space = 10
+            elif visible[1] == 'open_room':
+                space = 20
+            elif 'corner' in visible[1]:
+                space = 25
+            start_area = (max(x-space,0), max(y-space,0))
+            end_area = (min(x+space, image.shape[0]), min(y+space, image.shape[1]))
+            area_check = image[start_area[1]:end_area[1], start_area[0]:end_area[0]]
+            if np.sum(area_check) > 3*255 or x < image.shape[0]*.30:# pixel
+                cv.circle(image, (x, y), 4, 100)
+            else:
+                print ("empty for ", visible)
+
+        image_publisher_annotated.publish(CvBridge().cv2_to_imgmsg(image))
+    return local_map

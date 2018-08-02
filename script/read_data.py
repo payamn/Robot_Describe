@@ -42,11 +42,6 @@ if __name__ == '__main__':
         help='is cuda')
     parser.set_defaults(isCuda=True)
 
-    parser.add_argument(
-        '--isOnline', dest='isOnline', action='store_true',
-        help='is Online processing')
-    parser.set_defaults(isOnline=True)
-
 
     args = parser.parse_args()
 
@@ -55,32 +50,22 @@ if __name__ == '__main__':
 
     # rospy.init_node('listener', anonymous=True)
 
-    if args.isOnline:
-        print ("online")
-        map_dataset_online = Map_Dataset(is_online=args.isOnline)
-        print ("after map dataset")
-        my_model = Map_Model(map_dataset_online, map_dataset_online,
-                            resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
-                                                     "check_points/model_best.pth.tar"),
-                            save=True, load_weight=True, cuda=args.isCuda)
-        print ("start train")
-        my_model.train_iters(1, save=False)
-        exit(0)
+
 
     map_dataset_train = Map_Dataset(args.train)
     map_dataset_validation = Map_Dataset(args.validation)
 
-    my_model = Map_Model(map_dataset_train, map_dataset_validation,
-                         resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
-                                                  "check_points/model_best.pth.tar"),
-                         save=True, load_weight=True, cuda=args.isCuda)
-
-    # to debug:
     # my_model = Map_Model(map_dataset_train, map_dataset_validation,
     #                      resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
     #                                               "check_points/model_best.pth.tar"),
-    #                      save=False, load_weight=True, log=False, cuda=False)
-    # my_model.visualize_dataset(args.batchSize, map_dataset_validation)
-    # exit(0)
+    #                      save=True, load_weight=True, cuda=args.isCuda)
+
+    # to debug:
+    my_model = Map_Model(map_dataset_train, map_dataset_validation,
+                         resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
+                                                  "check_points/model_best.pth.tar"),
+                         save=False, load_weight=True, log=False, cuda=False)
+    my_model.visualize_dataset(args.batchSize, map_dataset_validation)
+    exit(0)
 
     my_model.train_iters(1000, print_every=10, save=True, batch_size=args.batchSize)

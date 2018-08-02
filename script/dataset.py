@@ -60,57 +60,32 @@ class Laser_Dataset(Dataset):
             return word_encoded_class, word_encoded_pose, speeds,laser_scans
 
 class Map_Dataset(Dataset):
-    def __init__(self, _dataset_directory=None, is_online=False):
+    def __init__(self, _dataset_directory=None):
         """
 
         :param _dataset_directory: directory containing pickle files
         :param is_online: are you using robot online data or saved pickle file
         """
-        self.is_online = is_online
         self.generate_map = None
         self._dataset_directory = _dataset_directory
-        if not self.is_online:
-            self.files = [os.path.join(self._dataset_directory, f) for f in os.listdir(self._dataset_directory) if
-                          os.path.isfile(os.path.join(self._dataset_directory, f))]
-        else:
-
-            self.generate_map = GenerateMap(is_online=is_online)
-            self.generate_map.init_map()
-
-            print ("after GenerateMap online")
-            t = threading.Thread(target=self.generate_map.read_from_pickle, args = ())
-            t.daemon = True
-            t.start()
-           
-            print ("after read from pickle map dataset")
+        self.files = [os.path.join(self._dataset_directory, f) for f in os.listdir(self._dataset_directory) if
+                      os.path.isfile(os.path.join(self._dataset_directory, f))]
 
         self.word_encoding = model_utils.WordEncoding()
 
-
-
     def __len__(self):
-        if self.is_online:
-            return 100000
         return len(self.files)
 
     def __getitem__(self, i):
-        if not self.is_online:
-                try:
-                    dic_data = pickle.load(f)
-                except ValueError:
-                    print (self.files[i])
-                    exit(0)
-                language = dic_data["language"]
-                laser_scans = dic_data["laser_scan"]
-                local_maps = dic_data["local_maps"]
-        else:
-            while not self.generate_map.new_data_ready:
-                time.sleep(0.1)
-                # print ("wait for data")
-
-            print ("got a data")
-            language, laser_scans, local_maps = self.generate_map.get_data()
-
+        with open(self.files[i], 'rb') as f:
+            try:
+                dic_data = pickle.load(f)
+            except ValueError:
+                print (self.files[i])
+                exit(0)
+        language = dic_data["language"]
+        laser_scans = dic_data["laser_scan"]
+        local_maps = dic_data["local_maps"]
 
 
         word_encoded = list(map(self.word_encoding.get_object_class, language))

@@ -23,7 +23,7 @@ class Utility:
         return data
 
     @staticmethod
-    def sub_image(image, resolution, center, theta, width, height, only_forward=False):
+    def sub_image(image, resolution, center, theta, width, height, only_forward=False, dilate=True):
         '''
         Rotates OpenCV image around center with angle theta (in deg)
         then crops the image according to width and height.
@@ -51,7 +51,10 @@ class Utility:
         y = int(np.ceil(center[1] - height / 2))
 
         image = image[y:y + height, x:x + width]
-
+        if dilate:
+            kernel = np.ones((10, 10), np.uint8)  # note this is a horizontal kernel
+            d_im = cv2.dilate(image, kernel, iterations=1)
+            image = cv2.erode(d_im, kernel, iterations=1)
         return image
 
     @staticmethod

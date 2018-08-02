@@ -56,8 +56,12 @@ class GenerateMap:
         self.pose = (10, 10, 0)
         self.robot_orientation_degree = (0,0,0)
         self.map = {}
+        self.ground_truth_map = {}
+
         self.language = None
         self.data_pointer = 0
+        self.image_pub_ground_truth = rospy.Publisher("local_map_ground_truth", Image, queue_size=1)
+        self.image_pub_ground_truth_annotated = rospy.Publisher("local_map_annotated_ground_truth", Image, queue_size=1)
         self.image_pub = rospy.Publisher("local_map", Image, queue_size=1)
         self.image_pub_annotated = rospy.Publisher("local_map_annotated", Image, queue_size=1)
         self.laser_data = None
@@ -73,6 +77,7 @@ class GenerateMap:
         self.skip_len = 2
         self.counter = 0
         self.local_map = None
+        self.ground_truth_local_map = None
         self.generate_path = ()
         self.reset_pos_robot = rospy.ServiceProxy('/reset_position_robot_0', reset_position)
         self.publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
@@ -91,40 +96,17 @@ class GenerateMap:
 
         # self.reset_gmapping()
         # self.get_map_info()
+        self.get_map()
 
     def get_map_info(self):
         if not self.is_init:
             return
-        # print "in get_get info"
-        rospy.wait_for_service('/cost_map_node/map_info')
-        try:
-            map_info_service = rospy.ServiceProxy('/cost_map_node/map_info', GetMap)
-            start_time = time.time()
-            map_info = map_info_service()
-            # print("get map --- %s seconds ---" % (time.time() - start_time))
-            self.map["info"] = map_info.map.info
-            # print "map_info set"
-        except rospy.ServiceException, e:
-            print "Service call failed: %s" % e
+        self.map["info"] = model_utils.get_map_info()
 
     def get_map(self):
-        rospy.wait_for_service('/dynamic_map')
-        try:
-            gmap_service = rospy.ServiceProxy('/dynamic_map', GetMap)
-            start_time = time.time()
-            gmap = gmap_service()
-            # print("get map --- %s seconds ---" % (time.time() - start_time))
-            map_array = np.array(gmap.map.data).reshape((gmap.map.info.height, gmap.map.info.width))
-            map_array = Utility.normalize(map_array)
-            self.map["data"] = map_array
-            self.map["info"] = gmap.map.info
-        except rospy.ServiceException, e:
-            print "Service call failed: %s" % e
-
-    # def reset_gmapping(self):
-
-
-    import math
+        map_array, ground_truth_map = model_utils.get_map()
+        self.ground_truth_map["data"] = map_array
+        self.ground_truth_map["info"] = ground_truth_map.map.info
 
     def move_robot_to_pose_reset_gmap(self, coordinate, coordinate_next):
         self.is_init = False
@@ -150,30 +132,41 @@ class GenerateMap:
         p.wait()
         time.sleep(0.5)
         # print "angle", angle*180.0/math.pi
+        p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
+        rospy.wait_for_service('/cost_map_node/map_info')
+        time.sleep(0.5)
 
+        self.init_map()
+        print ("gmapping reset")
+    
+    def init_map(self):
         self.laser_data = None
         self.laser_list = []
         self.speed_list = []
         self.local_map_list = []
         self.local_map = None
+        self.ground_truth_local_map = None
+
         self.current_speed = None
         self.language = None
-        self.prev_points = [([0, 0],0 )for x in range(10)]
+        self.prev_points = [([0, 0], 0) for x in range(10)]
 
         time.sleep(0.5)
-
-        p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
-        rospy.wait_for_service('/cost_map_node/map_info')
-        time.sleep(0.5)
-        self.init_map()
-    
-    def init_map(self):
+        self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
-        print ("gmapping reset")
         time.sleep(0.5)
 
-        self.is_init = True    
+        self.is_init = True
+
+    def get_ground_truth_map(self):
+        if not self.is_init:
+            print "not init"
+            return
+
+        self.ground_truth_local_map = model_utils.get_local_map(
+            self.ground_truth_map["info"], self.ground_truth_map["data"], self.language, self.image_pub_ground_truth,
+            self.image_pub_ground_truth_annotated, map_topic_name="/map_server")
 
     def get_local_map(self, annotated_publish=True):
         self.get_map_info()
@@ -181,37 +174,13 @@ class GenerateMap:
         if not self.map.has_key("info") or not self.is_init:
             print "no map or not init"
             return
-        # get robot pose in gmapping
-        position, quaternion = Utility.get_robot_pose("/map")
-        plus_x = self.map["info"].origin.position.y * self.map["info"].resolution
-        plus_y = self.map["info"].origin.position.x * self.map["info"].resolution
-        position[0] -= self.map["info"].origin.position.x #* self.map["info"].resolution
-        position[1] -= self.map["info"].origin.position.y #* self.map["info"].resolution
 
-        _, _, z = Utility.quaternion_to_euler_angle(quaternion[0], quaternion[1],
-                                                    quaternion[2], quaternion[3])
-
-
-        image = Utility.sub_image(self.map["data"], self.map["info"].resolution, (position[0]  , position[1]), z,
-                          constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True)
-        self.image_pub.publish(self.bridge.cv2_to_imgmsg(image))
-        self.local_map = image.copy()
-
-        if annotated_publish and self.language is not None:
-            for visible in self.language:
-                x = int(np.ceil(visible[2][0]/constants.LOCAL_MAP_DIM*image.shape[0] ))
-                y = int(np.ceil((visible[2][1]/(constants.LOCAL_MAP_DIM/2.0) + 1)/2*image.shape[0]))
-
-                print visible[1]
-                cv2.circle(image, (x, y), 4, 100)
-
-            self.image_pub_annotated.publish(self.bridge.cv2_to_imgmsg(image))
-
+        self.local_map = model_utils.get_local_map(
+                self.map["info"], self.map["data"], self.language, self.image_pub, self.image_pub_annotated, dilate=True)
 
     def get_data(self):
         self.new_data_ready = False
         return self.language, self.laser_data, self.local_map
-
 
     def save_pickle(self):
         if not self.is_init or self.laser_data is None or self.local_map is None \
@@ -295,6 +264,7 @@ class GenerateMap:
         print ("get local map")
 
         self.get_local_map()
+        self.get_ground_truth_map()
         self.save_pickle()
         # print ("local map called")
 
@@ -312,10 +282,10 @@ class GenerateMap:
             return
         else:
             if math.fabs(odom_data.twist.twist.angular.z) > 0.5:
-                self.is_turning = 5
+                self.is_turning = 1
                 # print "turning {}".format(odom_data.twist.twist.angular.z)
             elif math.fabs(odom_data.twist.twist.angular.z) > 0.3 and self.is_turning < 2:
-                self.is_turning = 2
+                self.is_turning = 1
 
 
             self.stop = False
@@ -356,7 +326,6 @@ class GenerateMap:
 
         self.language = return_nodes
 
-
     def read_from_pickle(self):
         print ("!!!!!read from pickle")
 
@@ -370,7 +339,8 @@ class GenerateMap:
         # for points in description_degree:
         self.points_description = [position_points, description_degree]
         # print description_degree
-        rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
+        if not self.is_online:
+            rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
         rospy.Subscriber("/base_scan", LaserScan, self.callback_laser_scan, queue_size=1)
         rospy.spin()
 
@@ -590,7 +560,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=5900)
+    generate_map = GenerateMap(start_pickle=15900)
 
     if args.generate_point:
         generate_map.write_to_pickle()
