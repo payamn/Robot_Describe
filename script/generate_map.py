@@ -59,6 +59,8 @@ class GenerateMap:
         self.ground_truth_map = {}
 
         self.language = None
+        self.language_with_objectness = None
+        self.visited_lang = {}
         self.data_pointer = 0
         self.image_pub_ground_truth = rospy.Publisher("local_map_ground_truth", Image, queue_size=1)
         self.image_pub_ground_truth_annotated = rospy.Publisher("local_map_annotated_ground_truth", Image, queue_size=1)
@@ -148,11 +150,12 @@ class GenerateMap:
         self.ground_truth_local_map = None
 
         self.current_speed = None
+        self.visited_lang = {}
         self.language = None
+        self.language_with_objectness = None
         self.prev_points = [([0, 0], 0) for x in range(10)]
 
         time.sleep(0.5)
-        self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
         time.sleep(0.5)
@@ -161,7 +164,6 @@ class GenerateMap:
 
     def get_ground_truth_map(self):
         if not self.is_init:
-            print "not init"
             return
 
         self.ground_truth_local_map = model_utils.get_local_map(
@@ -172,7 +174,6 @@ class GenerateMap:
         self.get_map_info()
         # time.sleep(5)
         if not self.map.has_key("info") or not self.is_init:
-            print "no map or not init"
             return
 
         self.local_map = model_utils.get_local_map(
@@ -184,11 +185,11 @@ class GenerateMap:
 
     def save_pickle(self):
         if not self.is_init or self.laser_data is None or self.local_map is None \
-                or self.language is None or self.current_speed is None:
+                or self.language_with_objectness is None or self.current_speed is None:
+            print "lang:", self.language_with_objectness
             return
         if self.is_online:
             self.new_data_ready = True
-            print ("new data")
             return
 
         # lasers = []
@@ -198,8 +199,10 @@ class GenerateMap:
         #     lasers = self.laser_list[self.data_pointer:] + self.laser_list[0:self.data_pointer]
         #     speeds = self.speed_list[self.data_pointer:] + self.speed_list[0:self.data_pointer]
         #     local_maps = self.local_map_list[self.data_pointer:] + self.local_map_list[0:self.data_pointer]
-        print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language))
-        data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language}
+        print ("saving {}.pkl language:{}".format(self.pickle_counter, self.language_with_objectness))
+        print ("")
+
+        data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language_with_objectness}
         pickle.dump(data,
                     open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
@@ -247,7 +250,6 @@ class GenerateMap:
         # self.add_data(laser_data)
 
     def callback_map_image(self, image):
-        print ("in call back image")
         if not self.is_init:
             return
         try:
@@ -260,14 +262,64 @@ class GenerateMap:
             return
         map_array = Utility.normalize(cv_image)
         self.map["data"] = map_array
-        # print ("local map updated")
-        print ("get local map")
 
         self.get_local_map()
         self.get_ground_truth_map()
-        self.save_pickle()
-        # print ("local map called")
 
+        self.calculate_objectness_language()
+
+        self.save_pickle()
+
+    def calculate_objectness_language(self):
+        if self.language is None:
+            print ("languge is NOne")
+            return None
+
+        image_gt = self.ground_truth_local_map.copy()
+        image = self.local_map.copy()
+        self.language_with_objectness = []
+        for visible in self.language:
+            x_gt = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image_gt.shape[0]))
+            y_gt = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image_gt.shape[0]))
+            x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
+            y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
+            space = 20
+            if visible[1] == 'close_room':
+                space = 10
+            # first calculate a box that fits the detected object
+            area_check = model_utils.get_area(x_gt, y_gt, space, image_gt)
+            while np.sum(area_check) < 8 * 255:  # at least 7pixel
+                space += 6
+                area_check = model_utils.get_area(x_gt, y_gt, space, image_gt)
+            # to make sure it should contain
+            if 'junction' in visible[1]:
+                space += 7
+            space += 5
+            # Now get the area for gmap
+            objectness = 0.1
+            area_gmap = model_utils.get_area(x, y, space, image)
+
+            if np.sum(area_gmap) > 2 * 255 and image.shape[1] * .1 < y < image.shape[1] * .90:
+                objectness = 1
+            elif (x < image.shape[0] * .30 and image.shape[1] * .3 < y < image.shape[1] * .70):
+                normalize = 1 - (float(x) / float(image.shape[0]) / 0.3)  # 0 to 1
+                objectness = min(max(normalize * 2, 0.35), 0.8)
+            elif image.shape[1] * .3 < y < image.shape[1] * .70:
+                normalize = (1 - (float(x) / image.shape[0])) / 2  # 0 to 0.35
+                objectness = min(max(normalize, 0.1), 0.35)
+            if visible[0] in self.visited_lang:
+                objectness = max(objectness, self.visited_lang[visible[0]])
+            if objectness > 0.35:
+                self.visited_lang[visible[0]] = objectness
+                cv2.circle(image, (x, y), 4, 100)
+
+            cv2.circle(image_gt, (x_gt, y_gt), 4, 100)
+            list_vis = list(visible)
+            list_vis.append(objectness)
+            self.language_with_objectness.append(list_vis)
+
+        self.image_pub_annotated.publish(CvBridge().cv2_to_imgmsg(image))
+        self.image_pub_ground_truth_annotated.publish(CvBridge().cv2_to_imgmsg(image_gt))
 
     def callback_robot_0(self, odom_data):
 
@@ -283,7 +335,6 @@ class GenerateMap:
         else:
             if math.fabs(odom_data.twist.twist.angular.z) > 0.5:
                 self.is_turning = 1
-                # print "turning {}".format(odom_data.twist.twist.angular.z)
             elif math.fabs(odom_data.twist.twist.angular.z) > 0.3 and self.is_turning < 2:
                 self.is_turning = 1
 
@@ -386,8 +437,8 @@ class GenerateMap:
     def point_generator(self):
         time.sleep(0.5)
         # we will first generate some short_range path and then long ones
-        short_range = 50
-        long_range = 20
+        short_range = 0
+        long_range = 40
         while True:
             random.seed(a=None)
             if short_range > 0:
@@ -560,7 +611,7 @@ if __name__ == '__main__':
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=15900)
+    generate_map = GenerateMap(start_pickle=0)
 
     if args.generate_point:
         generate_map.write_to_pickle()

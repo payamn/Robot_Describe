@@ -137,6 +137,16 @@ def get_map():
     except rospy.ServiceException, e:
         print "Service call failed: %s" % e
 
+def get_area(x, y, space, local_map):
+    start_area = (max(x - space, 0), max(y - space, 0))
+    end_area = (min(x + space, local_map.shape[0]), min(y + space, local_map.shape[1]))
+    area = local_map[start_area[1]:end_area[1], start_area[0]:end_area[0]]
+    mask = np.zeros(area.shape, dtype="uint8")
+    cv.circle(mask, (area.shape[0]/2, area.shape[1]/2), area.shape[0]/2, 1, thickness=-1)
+    area = mask * area
+    return area
+
+
 def get_local_map(
         map_info, map_data, language=None, image_publisher=None, image_publisher_annotated=None, map_topic_name="map", dilate=False):
 
@@ -156,24 +166,24 @@ def get_local_map(
         image_publisher.publish(CvBridge().cv2_to_imgmsg(image))
     local_map = image.copy()
 
-    if image_publisher_annotated is not None and language is not None:
-        for visible in language:
-            x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
-            y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
-            space = 45
-            if visible[1] == 'close_room':
-                space = 10
-            elif visible[1] == 'open_room':
-                space = 20
-            elif 'corner' in visible[1]:
-                space = 25
-            start_area = (max(x-space,0), max(y-space,0))
-            end_area = (min(x+space, image.shape[0]), min(y+space, image.shape[1]))
-            area_check = image[start_area[1]:end_area[1], start_area[0]:end_area[0]]
-            if np.sum(area_check) > 3*255 or x < image.shape[0]*.30:# pixel
-                cv.circle(image, (x, y), 4, 100)
-            else:
-                print ("empty for ", visible)
-
-        image_publisher_annotated.publish(CvBridge().cv2_to_imgmsg(image))
+    # if image_publisher_annotated is not None and language is not None:
+    #     for visible in language:
+    #         x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
+    #         y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
+    #         space = 45
+    #         if visible[1] == 'close_room':
+    #             space = 10
+    #         elif visible[1] == 'open_room':
+    #             space = 20
+    #         elif 'corner' in visible[1]:
+    #             space = 25
+    #         start_area = (max(x-space,0), max(y-space,0))
+    #         end_area = (min(x+space, image.shape[0]), min(y+space, image.shape[1]))
+    #         area_check = local_map[start_area[1]:end_area[1], start_area[0]:end_area[0]]
+    #         if np.sum(area_check) > 3*255 or x < image.shape[0]*.30:# pixel
+    #             cv.circle(image, (x, y), 4, 100)
+    #         else:
+    #             print ("empty for ", visible)
+    #
+    #     image_publisher_annotated.publish(CvBridge().cv2_to_imgmsg(image))
     return local_map
