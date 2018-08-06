@@ -1,7 +1,8 @@
 
-MAP_NAME = "real_1"
-X_OFFSET = -35.000
-Y_OFFSET = -13.200
+MAP_NAME = "real_2"
+X_OFFSET = -30.150
+Y_OFFSET = -26.500
+
 """
 To Run the code for new map:
 

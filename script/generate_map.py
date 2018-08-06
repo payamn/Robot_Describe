@@ -607,11 +607,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
+    parser.add_argument('--start_pickle', type=int, default=0)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
-    generate_map = GenerateMap(start_pickle=0)
+    generate_map = GenerateMap(start_pickle=args.start_pickle)
 
     if args.generate_point:
         generate_map.write_to_pickle()

@@ -1,9 +1,9 @@
 base_local_planner: dwa_local_planner/DWAPlannerROS
 
 controller:
-  acc_lim_theta: 0.9998999999999999
-  acc_lim_x: 21.997799999999998
-  acc_lim_y: 32.9967
+  acc_lim_theta: 0.298999999999999
+  acc_lim_x: 1.
+  acc_lim_y: 1.
   allow_init_with_backwards_motion: false
   cmd_angle_instead_rotvel: false
   costmap_obstacles_behind_robot_dist: 1.5
