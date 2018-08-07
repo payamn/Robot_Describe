@@ -65,7 +65,7 @@ if __name__ == '__main__':
                          resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
                                                   "check_points/model_best.pth.tar"),
                          save=False, load_weight=True, log=False, cuda=False)
-    my_model.visualize_dataset(args.batchSize, map_dataset_validation)
+    my_model.visualize_dataset(args.batchSize, map_dataset_train)
     exit(0)
 
     my_model.train_iters(1000, print_every=10, save=True, batch_size=args.batchSize)

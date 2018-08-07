@@ -39,44 +39,46 @@ class WordEncoding:
             # map_data = np.reshape(map_data[batch].cpu().data.numpy(),(map_data.shape[1], map_data.shape[2], 1))
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
+            for degree in [0, -10, 10]:
+                copy_backtorgb = backtorgb.copy()
+                for x in range (predict_classes.shape[1]):
+                    for y in range (predict_classes.shape[2]):
+                        for anchor in range(predict_classes.shape[3]):
+                            if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
+                                pose = (target_poses[batch][x][y][anchor].cpu().numpy())
+                                pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
+                                pose = pose.astype(int)
+                                pose = tuple(pose)
+                                target.append((pose, self.get_class_char(target_classes[batch][x][y][anchor].item())))
 
-            for x in range (predict_classes.shape[1]):
-                for y in range (predict_classes.shape[2]):
-                    for anchor in range(predict_classes.shape[3]):
-                        if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
-                            pose = (target_poses[batch][x][y][anchor].cpu().numpy())
-                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
-                            pose = pose.astype(int)
-                            pose = tuple(pose)
-                            target.append((pose, self.get_class_char(target_classes[batch][x][y][anchor].item())))
-                            cv.circle(backtorgb, pose, 5, (0, 0, 255))
-                            cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
+                                cv.circle(copy_backtorgb, pose, 5, (0, 0, 255))
+                                cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
-                        if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
-                            pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
-                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
-                            pose = pose.astype(int)
-                            pose = tuple(pose)
-                            predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
-                            cv.circle(backtorgb, pose, 4, (255, 0, 100))
-                            cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+                            # if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
+                            #     pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
+                            #     pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
+                            #     pose = pose.astype(int)
+                            #     pose = tuple(pose)
+                            #     predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
+                            #     cv.circle(backtorgb, pose, 4, (255, 0, 100))
+                            #     cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
 
-            cv.imshow("map", backtorgb)
-            print ("predict:")
-            print predict
-            print ("target")
-            print target
-            cv.imshow("laser map", backtorgb_laser)
-            cv.waitKey()
+                cv.imshow("map", backtorgb)
+                print ("predict:")
+                # print predict
+                print ("target")
+                # print target
+                cv.imshow("laser map", backtorgb_laser)
+                cv.waitKey()
 
-            plt.show()
+                plt.show()
 
     def get_object_class(self, object):
         if object[1] in self.classes:
             prefer_anchor = 1
             if "room" in object[1]:
                 prefer_anchor = 0
-            return self.classes[object[1]], object[2], prefer_anchor
+            return self.classes[object[1]], object[2], prefer_anchor, object[3]
         else:
             print object, 0
             print ("set_objcet_class class not found skiping")

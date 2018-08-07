@@ -63,6 +63,20 @@ class Utility:
         return image
 
     @staticmethod
+    def rotate_point(origin, point, angle):
+        """
+        Rotate a point counterclockwise by a given angle around a given origin.
+
+        The angle should be given in radians.
+        """
+        ox, oy = origin
+        px, py = point
+
+        qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+        qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+        return qx, qy
+
+    @staticmethod
     def get_robot_pose(map_topic):
         global tf_listner
 
@@ -73,7 +87,7 @@ class Utility:
                 t = rospy.Time(0)
                 position, quaternion = tf_listner.lookupTransform(map_topic, "/base_link", t)
             except Exception as e:
-                print e
+                print (e)
                 number_of_try -= 1
                 time.sleep(0.2)
                 continue

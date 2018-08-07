@@ -89,7 +89,7 @@ class Map_Dataset(Dataset):
 
 
         word_encoded = list(map(self.word_encoding.get_object_class, language))
-        word_encoded = [(x[0], (x[1][0]/constants.LOCAL_MAP_DIM*constants.GRID_LENGTH, (x[1][1]/constants.LOCAL_MAP_DIM+0.5) * constants.GRID_LENGTH), x[2]) for x in word_encoded ]
+        word_encoded = [(x[0], (x[1][0]/constants.LOCAL_MAP_DIM*constants.GRID_LENGTH, (x[1][1]/constants.LOCAL_MAP_DIM+0.5) * constants.GRID_LENGTH), x[2], x[3]) for x in word_encoded ]
 
         # width , height, two anchors, objectness + (x, y) + classes
         target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 4], dtype=torch.float)
@@ -111,9 +111,8 @@ class Map_Dataset(Dataset):
                 y_center = 0.99999
 
 
-            # objectness between 0.4 to 1
             try:
-                target[x][y][word[2]][0] = max(min((1-x_center) * 3, 1), 0.4)
+                target[x][y][word[2]][0] = word[3]
             except Exception as e:
                 print e
                 print ("target shape: ", target.shape)
@@ -133,7 +132,15 @@ class Map_Dataset(Dataset):
 
         laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER)
         laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
+        cv2.imshow("base", local_maps.copy())
+        cv2.waitKey(1)
 
+
+        local_maps = Utility.sub_image(local_maps, 0.0500000007451,
+                                           (0, constants.LOCAL_MAP_DIM / 2),
+                                           20, 16, 16, only_forward=True)
+        cv2.imshow("base2", local_maps.copy())
+        cv2.waitKey(1)
         local_maps = cv2.resize(local_maps, (240, 240))
 
         laser_scan_map = laser_scan_map.squeeze(2)

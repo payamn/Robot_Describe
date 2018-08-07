@@ -2,10 +2,10 @@
 	<arg name="base_frame" default="base_link" />
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
 	<arg name="odom_frame" default="odom" />
-	<arg name="transform_pose" default="-30.150 -26.5" />
-	<arg name="map_name" default="real_2" />
-	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
-	<!--<arg name="map_name" default="combinenormal" />-->
+	<!--<arg name="transform_pose" default="-30.150 -26.5" />-->
+	<!--<arg name="map_name" default="real_2" />-->
+	<arg name="transform_pose" default="-67.5 -19.875" />
+	<arg name="map_name" default="combinenormal" />
 	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
 	<!--<arg name="map_name" default="combinenormal" />-->
 	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->

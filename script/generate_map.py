@@ -268,7 +268,7 @@ class GenerateMap:
 
         self.calculate_objectness_language()
 
-        self.save_pickle()
+        #self.save_pickle()
 
     def calculate_objectness_language(self):
         if self.language is None:
