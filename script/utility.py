@@ -23,11 +23,13 @@ class Utility:
         return data
 
     @staticmethod
-    def sub_image(image, resolution, center, theta, width, height, only_forward=False, dilate=True):
+    def sub_image(image, resolution, center, theta, width, height, only_forward=False, dilate=True, transform=None):
         '''
         Rotates OpenCV image around center with angle theta (in deg)
         then crops the image according to width and height.
         '''
+        if not theta:
+            theta = 0
         width = int(np.ceil(width / resolution))
         height = int(np.ceil(height / resolution))
         center = (center[0] / resolution + height, center[1] / resolution + width)
@@ -44,6 +46,11 @@ class Utility:
         # cv2.waitKey(1)
         matrix = cv2.getRotationMatrix2D(center=center, angle=theta, scale=1)
         image = cv2.warpAffine(image, matrix, (shape[1], shape[0]))
+
+        if transform:
+            M = np.float32([[1, 0, transform[0]*width], [0, 1, transform[1]*height]])
+            image = cv2.warpAffine(image, M, (shape[1], shape[0]))
+
         # cv2.imshow("map1", image)
         # cv2.waitKey(1)
 

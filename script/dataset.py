@@ -60,7 +60,7 @@ class Laser_Dataset(Dataset):
             return word_encoded_class, word_encoded_pose, speeds,laser_scans
 
 class Map_Dataset(Dataset):
-    def __init__(self, _dataset_directory=None):
+    def __init__(self, _dataset_directory=None, augmentation=False):
         """
 
         :param _dataset_directory: directory containing pickle files
@@ -72,6 +72,8 @@ class Map_Dataset(Dataset):
                       os.path.isfile(os.path.join(self._dataset_directory, f))]
 
         self.word_encoding = model_utils.WordEncoding()
+        self.augmentation = augmentation
+        print (_dataset_directory, "augmentation: ", augmentation)
 
     def __len__(self):
         return len(self.files)
@@ -87,9 +89,33 @@ class Map_Dataset(Dataset):
         laser_scans = dic_data["laser_scan"]
         local_maps = dic_data["local_maps"]
 
+        angle = None
+        transform = None
 
-        word_encoded = list(map(self.word_encoding.get_object_class, language))
-        word_encoded = [(x[0], (x[1][0]/constants.LOCAL_MAP_DIM*constants.GRID_LENGTH, (x[1][1]/constants.LOCAL_MAP_DIM+0.5) * constants.GRID_LENGTH), x[2], x[3]) for x in word_encoded ]
+        if self.augmentation:
+            # max angle transform -+30 degree
+            angle = random.randint(-300, 300)/10.0
+            # max transform pose is +0.2 out of 1
+            transform = (random.randint(0, 2000)/10000.0, random.randint(-1000, 1000)/10000.0)
+
+        word_encoded = []
+        words = list(map(self.word_encoding.get_object_class, language))
+        center = (0, constants.LOCAL_DISTANCE/ 2)
+        for word in words:
+            x, y = word[1]
+            y = y + constants.LOCAL_DISTANCE/ 2
+            if angle:
+                x, y = Utility.rotate_point(center,(x, y), math.radians(-angle))
+            x = x / constants.LOCAL_MAP_DIM
+            y = (y - constants.LOCAL_DISTANCE/2) / (constants.LOCAL_MAP_DIM) + 0.5
+            if transform:
+                x += transform[0]
+                y += transform[1]
+            if 0.1 < x < 0.9 and 0.1 < y < 0.9:
+                x = x * constants.GRID_LENGTH
+                y = y * constants.GRID_LENGTH
+                word_encoded.append((word[0], (x, y), word[2], word[3], angle, transform))
+
 
         # width , height, two anchors, objectness + (x, y) + classes
         target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 4], dtype=torch.float)
@@ -130,21 +156,20 @@ class Map_Dataset(Dataset):
         target_poses = target[ :, :, :, 1:3]
         target_objectness = target[ :, :, :, 0]
 
-        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER)
+        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform)
+        laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, circle_size=1)
         laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
-        cv2.imshow("base", local_maps.copy())
-        cv2.waitKey(1)
 
 
         local_maps = Utility.sub_image(local_maps, 0.0500000007451,
-                                           (0, constants.LOCAL_MAP_DIM / 2),
-                                           20, 16, 16, only_forward=True)
-        cv2.imshow("base2", local_maps.copy())
-        cv2.waitKey(1)
+                                        center,angle,
+                                        constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True, transform=transform
+                                       )
         local_maps = cv2.resize(local_maps, (240, 240))
 
         laser_scan_map = laser_scan_map.squeeze(2)
-        local_maps = torch.from_numpy(np.stack([local_maps, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
+        laser_scan_map_low = laser_scan_map_low.squeeze(2)
+        local_maps = torch.from_numpy(np.stack([local_maps, laser_scan_map_low, laser_scan_map])).type(torch.FloatTensor)
 
         # local_maps = torch.from_numpy(local_maps).type(torch .FloatTensor).unsqueeze(0)
 

@@ -296,7 +296,7 @@ class Map_Model:
             topv, topi = classes_out.data.topk(1)
 
             if plot:
-                self.word_encoding.visualize_map(local_map[:,0,:,:], laser_map[:,0,:,:], topi, poses, objectness,
+                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], topi, poses, objectness,
                                                     target_classes, target_poses, target_objectness)
             # b = word_encoded_class != self.word_encoding.classes["noting"]
             # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
@@ -451,19 +451,19 @@ class Map_Model:
             print ("use validation data to visualize")
         self.validation(batch_size, 1, False, plot= True, dataset=dataset)
 
-    def calculate_encoded_pose(self, word_encoded_pose):
-        divide = torch.FloatTensor([[1 / constants.LOCAL_MAP_DIM, 1 / (constants.LOCAL_MAP_DIM / 2.0)]])
-        divide = divide.repeat(5, 1)
-        divide = divide.unsqueeze(0)
-        addition = torch.FloatTensor([[0, 1]])
-        addition = addition.repeat(5, 1)
-        addition = addition.unsqueeze(0)
-        divide2 = torch.FloatTensor([[1, 0.5]])
-        divide2 = divide2.repeat(5, 1)
-        divide2 = divide2.unsqueeze(0)
-        word_encoded_pose = (word_encoded_pose * divide + addition) * divide2  # to be between 0-1
-        word_encoded_pose = Variable(word_encoded_pose).cuda() if self.use_cuda else Variable(word_encoded_pose)
-        return word_encoded_pose
+    # def calculate_encoded_pose(self, word_encoded_pose):
+    #     divide = torch.FloatTensor([[1 / constants.LOCAL_MAP_DIM, 1 / (constants.LOCAL_MAP_DIM / 2.0)]])
+    #     divide = divide.repeat(5, 1)
+    #     divide = divide.unsqueeze(0)
+    #     addition = torch.FloatTensor([[0, 1]])
+    #     addition = addition.repeat(5, 1)
+    #     addition = addition.unsqueeze(0)
+    #     divide2 = torch.FloatTensor([[1, 0.5]])
+    #     divide2 = divide2.repeat(5, 1)
+    #     divide2 = divide2.unsqueeze(0)
+    #     word_encoded_pose = (word_encoded_pose * divide + addition) * divide2  # to be between 0-1
+    #     word_encoded_pose = Variable(word_encoded_pose).cuda() if self.use_cuda else Variable(word_encoded_pose)
+    #     return word_encoded_pose
 
     def validation(self, batch_size, iter, save, plot=False, dataset=None):
         self.start = time.time()

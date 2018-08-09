@@ -1,7 +1,7 @@
 bag/*
 .idea/*
 bag*
-check_points*
+checkpoints*
 *.pyc
 **/logs/*
 **/dataset/*

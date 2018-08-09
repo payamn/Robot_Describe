@@ -279,10 +279,10 @@ class GenerateMap:
         image = self.local_map.copy()
         self.language_with_objectness = []
         for visible in self.language:
-            x_gt = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image_gt.shape[0]))
-            y_gt = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image_gt.shape[0]))
-            x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
-            y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
+            x_gt = int(np.ceil(visible[2][0] / constants.LOCAL_DISTANCE * image_gt.shape[0]))
+            y_gt = int(np.ceil((visible[2][1] / (constants.LOCAL_DISTANCE / 2.0) + 1) / 2 * image_gt.shape[0]))
+            x = int(np.ceil(visible[2][0] / constants.LOCAL_DISTANCE * image.shape[0]))
+            y = int(np.ceil((visible[2][1] / (constants.LOCAL_DISTANCE / 2.0) + 1) / 2 * image.shape[0]))
             space = 20
             if visible[1] == 'close_room':
                 space = 10

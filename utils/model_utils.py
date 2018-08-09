@@ -7,6 +7,7 @@ from script.utility import Utility
 from script import constants
 
 import torch
+import math
 
 from nav_msgs.srv import GetMap
 import rospy
@@ -39,39 +40,39 @@ class WordEncoding:
             # map_data = np.reshape(map_data[batch].cpu().data.numpy(),(map_data.shape[1], map_data.shape[2], 1))
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
-            for degree in [0, -10, 10]:
-                copy_backtorgb = backtorgb.copy()
-                for x in range (predict_classes.shape[1]):
-                    for y in range (predict_classes.shape[2]):
-                        for anchor in range(predict_classes.shape[3]):
-                            if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
-                                pose = (target_poses[batch][x][y][anchor].cpu().numpy())
-                                pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
-                                pose = pose.astype(int)
-                                pose = tuple(pose)
-                                target.append((pose, self.get_class_char(target_classes[batch][x][y][anchor].item())))
+            copy_backtorgb = backtorgb.copy()
+            for x in range (predict_classes.shape[1]):
+                for y in range (predict_classes.shape[2]):
+                    for anchor in range(predict_classes.shape[3]):
+                        if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
+                            pose = (target_poses[batch][x][y][anchor].cpu().numpy())
+                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
+                            pose = pose.astype(int)
+                            pose = tuple(pose)
+                            target.append((pose, self.get_class_char(target_classes[batch][x][y][anchor].item())))
 
-                                cv.circle(copy_backtorgb, pose, 5, (0, 0, 255))
-                                cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
+                            cv.circle(copy_backtorgb, pose, 5, (0, 0, 255))
+                            cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
-                            # if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
-                            #     pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
-                            #     pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
-                            #     pose = pose.astype(int)
-                            #     pose = tuple(pose)
-                            #     predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
-                            #     cv.circle(backtorgb, pose, 4, (255, 0, 100))
-                            #     cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+                        # if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
+                        #     pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
+                        #     pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
+                        #     pose = pose.astype(int)
+                        #     pose = tuple(pose)
+                        #     predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
+                        #     cv.circle(backtorgb, pose, 4, (255, 0, 100))
+                        #     cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+            cv.namedWindow("map")
+            cv.namedWindow("laser map")
+            cv.imshow("map", copy_backtorgb)
+            print ("predict:")
+            # print predict
+            print ("target")
+            print target
+            cv.imshow("laser map", backtorgb_laser)
+            cv.waitKey()
 
-                cv.imshow("map", backtorgb)
-                print ("predict:")
-                # print predict
-                print ("target")
-                # print target
-                cv.imshow("laser map", backtorgb_laser)
-                cv.waitKey()
-
-                plt.show()
+            plt.show()
 
     def get_object_class(self, object):
         if object[1] in self.classes:
@@ -90,7 +91,7 @@ class WordEncoding:
             return -1
 
 
-def laser_to_map(laser_array, fov, dest_size, max_range_laser):
+def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=None, transform=None, circle_size=3):
     fov = float(fov)
     degree_steps = fov/len(laser_array)
     map = np.zeros((dest_size, dest_size, 1))
@@ -103,10 +104,13 @@ def laser_to_map(laser_array, fov, dest_size, max_range_laser):
 
         x = x * to_map_coordinates
         y = (-y + 8.0/2.)* to_map_coordinates
-
-        if x >= dest_size or y >= dest_size or x<0 or y<0:
+        if rotate_degree:
+            x, y = Utility.rotate_point((0, dest_size/2.0), (x, y), math.radians(-rotate_degree))
+        if transform:
+            x, y = (x+transform[0]*dest_size, y+transform[1]*dest_size)
+        if x >= dest_size or y >= dest_size or x < 0 or y < 0:
             continue
-        cv.circle(map, (int(x), int(y)), 3, 255, -1);
+        cv.circle(map, (int(x), int(y)), circle_size, 255, -1);
 
         map[int(y), int(x),0] = 255
     # backtorgb = cv.cvtColor(map, cv.COLOR_GRAY2RGB)
@@ -162,13 +166,13 @@ def get_local_map(
                                                 quaternion[2], quaternion[3])
 
     image = Utility.sub_image(map_data, map_info.resolution, (position[0], position[1]), z,
-                              constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True, dilate=dilate)
+                              constants.LOCAL_DISTANCE, constants.LOCAL_DISTANCE, only_forward=True, dilate=dilate)
 
     if image_publisher:
         image_publisher.publish(CvBridge().cv2_to_imgmsg(image))
     local_map = image.copy()
 
-    # if image_publisher_annotated is not None and language is not None:
+    # if image_publisher_annotated is no`one and language is not None:
     #     for visible in language:
     #         x = int(np.ceil(visible[2][0] / constants.LOCAL_MAP_DIM * image.shape[0]))
     #         y = int(np.ceil((visible[2][1] / (constants.LOCAL_MAP_DIM / 2.0) + 1) / 2 * image.shape[0]))
