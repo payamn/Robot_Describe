@@ -1,7 +1,20 @@
-import rospy
+
+import sys
+
+def fix_python_path():
+    if sys.version_info.major == 3:
+        sys.path = [i for i in sys.path if 'python2' not in i]
+    elif sys.version_info.major == 2:
+        sys.path = [i for i in sys.path if 'python3' not in i]
+
+def add_current_path():
+    print('adding path: ', __file__)
+    sys.path.append(__file__)
+
+#import rospy
 # from robot import Robot
 from model import Map_Model
-import rospkg
+# import rospkg
 import os
 from dataset import Laser_Dataset, Map_Dataset
 import constants
@@ -21,12 +34,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--train', metavar='train', type=str,
         help='train dataset')
-    parser.set_defaults(train=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "train"))
+    # parser.set_defaults(train=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "train"))
 
     parser.add_argument(
         '--validation', metavar='validation', type=str,
         help='validation dataset')
-    parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))
+    # parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))
+    parser.add_argument(
+        '--resume', metavar='resume', type=str,
+        help='resume checkpoint')
+    parser.set_defaults(resume="/local_home/ros_workspace/src/Robot_Describe/checkpoints/model_best.pth.tar")
 
     parser.add_argument(
         '--batchSize', metavar='batchSize', type=int, default=50,
@@ -56,8 +73,7 @@ if __name__ == '__main__':
     map_dataset_validation = Map_Dataset(args.validation)
 
     my_model = Map_Model(map_dataset_train, map_dataset_validation,
-                         resume_path=os.path.join(rospkg.RosPack().get_path('robot_describe'),
-                                                  "checkpoints/model_best.pth.tar"),
+                         args.resume,
                          save=True, load_weight=True, cuda=args.isCuda)
 
     # to debug:

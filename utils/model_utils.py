@@ -33,7 +33,7 @@ class WordEncoding:
     #     return self.parent_class_dic[idx]
 
     def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes=None, target_poses=None, target_objectness=None):
-        print "\n\n"
+        print ("\n\n")
         for batch in range(predict_classes.shape[0]):
             predict = []
             target = []
@@ -68,7 +68,7 @@ class WordEncoding:
             print ("predict:")
             # print predict
             print ("target")
-            print target
+            print (target)
             cv.imshow("laser map", backtorgb_laser)
             cv.waitKey()
 
@@ -81,7 +81,7 @@ class WordEncoding:
                 prefer_anchor = 0
             return self.classes[object[1]], object[2], prefer_anchor, object[3]
         else:
-            print object, 0
+            print (object, 0)
             print ("set_objcet_class class not found skiping")
 
     def get_class_char(self, class_label):
@@ -127,7 +127,7 @@ def get_map_info():
         return map_info.map.info
         # print "map_info set"
     except rospy.ServiceException, e:
-        print "Service call failed: %s" % e
+        print ("Service call failed: %s" % e)
 
 
 def get_map():
@@ -141,7 +141,7 @@ def get_map():
         map_array = Utility.normalize(map_array)
         return map_array, map
     except rospy.ServiceException, e:
-        print "Service call failed: %s" % e
+        print ("Service call failed: %s" % e)
 
 def get_area(x, y, space, local_map):
     start_area = (max(x - space, 0), max(y - space, 0))

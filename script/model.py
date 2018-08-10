@@ -470,7 +470,7 @@ class Map_Model:
 
         if dataset is None:
             dataset = self.dataset_validation
-        self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=1, batch_size=batch_size, drop_last=True)
+        self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=5 , batch_size=batch_size, drop_last=True)
 
         epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
@@ -494,10 +494,10 @@ class Map_Model:
 
 
     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
-        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=1, batch_size=batch_size, drop_last=True)
+        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10 , batch_size=batch_size, drop_last=True)
         n_iters = self.start_epoch + n_iters
         start = max (self.start_epoch-1, 0)
-        self.validation(batch_size, start, save, plot=False)
+        #self.validation(batch_size, start, save, plot=False)
         for iter in range(self.start_epoch, n_iters):
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
