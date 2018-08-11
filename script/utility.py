@@ -23,7 +23,7 @@ class Utility:
         return data
 
     @staticmethod
-    def sub_image(image, resolution, center, theta, width, height, only_forward=False, dilate=True, transform=None):
+    def sub_image(image, resolution, center, theta, width, height, only_forward=False, dilate=True, transform=None, resize=None):
         '''
         Rotates OpenCV image around center with angle theta (in deg)
         then crops the image according to width and height.
@@ -36,6 +36,21 @@ class Utility:
 
         # Uncomment for theta in radians
         # theta *= 180/np.pi
+        if resize:
+            image_r = cv2.resize(image, (0, 0), fx=resize, fy=resize)
+            if resize > 1:
+                start_height = int(np.ceil((resize - 1) / 2.0 * image.shape[0]))
+                start_width = 0
+                # start_width = int(np.ceil((resize - 1) / 2.0 * image.shape[1]))
+                image = image_r[start_height:image.shape[0] + start_height, start_width:image.shape[1] + start_width]
+            elif resize < 1:
+                image = np.zeros(image.shape, np.uint8)
+                start_height = int(np.ceil((1 - resize) / 2.0 * image.shape[0]))
+                start_width = 0
+                # start_width = int(np.ceil((1 - resize) / 2.0 * image.shape[1]))
+                image[start_height: image_r.shape[0] + start_height, start_width: image_r.shape[1] + start_width] = image_r
+
+
         image = cv2.copyMakeBorder(image, top=height, bottom=height, left=width, right=width,
                                    borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
 

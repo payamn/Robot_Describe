@@ -91,12 +91,15 @@ class Map_Dataset(Dataset):
 
         angle = None
         transform = None
-
+        resize = None
         if self.augmentation:
             # max angle transform -+30 degree
             angle = random.randint(-300, 300)/10.0
             # max transform pose is +0.2 out of 1
-            transform = (random.randint(0, 2000)/10000.0, random.randint(-1000, 1000)/10000.0)
+            transform = (random.randint(-2000, 0)/10000.0, random.randint(-1000, 1000)/10000.0)
+            # resize between 0.8x to 1.2x
+            resize = random.randint(80,120)/100.0
+
 
         word_encoded = []
         words = list(map(self.word_encoding.get_object_class, language))
@@ -104,6 +107,11 @@ class Map_Dataset(Dataset):
         for word in words:
             x, y = word[1]
             y = y + constants.LOCAL_DISTANCE/ 2
+            if resize:
+                # x = x * resize + (1 - resize) * 0.5 * constants.LOCAL_DISTANCE
+                x = x * resize
+                y = y * resize + (1 - resize) * 0.5 * constants.LOCAL_DISTANCE
+
             if angle:
                 x, y = Utility.rotate_point(center,(x, y), math.radians(-angle))
             x = x / constants.LOCAL_MAP_DIM
@@ -111,6 +119,7 @@ class Map_Dataset(Dataset):
             if transform:
                 x += transform[0]
                 y += transform[1]
+
             if 0.1 < x < 0.9 and 0.1 < y < 0.9:
                 x = x * constants.GRID_LENGTH
                 y = y * constants.GRID_LENGTH
@@ -156,14 +165,12 @@ class Map_Dataset(Dataset):
         target_poses = target[ :, :, :, 1:3]
         target_objectness = target[ :, :, :, 0]
 
-        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform)
-        laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, circle_size=1)
+        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
+        laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
         laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
 
-
-        local_maps = Utility.sub_image(local_maps, 0.0500000007451,
-                                        center,angle,
-                                        constants.LOCAL_MAP_DIM, constants.LOCAL_MAP_DIM, only_forward=True, transform=transform
+        local_maps = Utility.sub_image(local_maps, 0.0500000007451, center, angle, constants.LOCAL_MAP_DIM,
+                                       constants.LOCAL_MAP_DIM, only_forward=True, transform=transform, resize=resize
                                        )
         local_maps = cv2.resize(local_maps, (240, 240))
 

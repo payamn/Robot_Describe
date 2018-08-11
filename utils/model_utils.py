@@ -91,7 +91,8 @@ class WordEncoding:
             return -1
 
 
-def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=None, transform=None, circle_size=3):
+def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=None, transform=None, circle_size=3,
+                 resize=None):
     fov = float(fov)
     degree_steps = fov/len(laser_array)
     map = np.zeros((dest_size, dest_size, 1))
@@ -103,7 +104,11 @@ def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=Non
         y = laser[1] * np.sin(laser[0]/180*np.pi) * max_range_laser
 
         x = x * to_map_coordinates
-        y = (-y + 8.0/2.)* to_map_coordinates
+        y = (-y + 8.0/2.) * to_map_coordinates
+        if resize:
+            # x = x * resize + (1 - resize) * 1 * dest_size
+            x = x * resize
+            y = y * resize + (1 - resize) * 0.5 * dest_size
         if rotate_degree:
             x, y = Utility.rotate_point((0, dest_size/2.0), (x, y), math.radians(-rotate_degree))
         if transform:
