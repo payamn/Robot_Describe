@@ -97,8 +97,8 @@ class Map_Dataset(Dataset):
             angle = random.randint(-300, 300)/10.0
             # max transform pose is +0.2 out of 1
             transform = (random.randint(-2000, 0)/10000.0, random.randint(-1000, 1000)/10000.0)
-            # resize between 0.8x to 1.2x
-            resize = random.randint(80,120)/100.0
+            # resize between 0.85x to 1.15x
+            resize = random.randint(85,115)/100.0
 
 
         word_encoded = []

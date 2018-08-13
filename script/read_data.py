@@ -84,4 +84,4 @@ if __name__ == '__main__':
     # my_model.visualize_dataset(args.batchSize, map_dataset_train)
     # exit(0)
 
-    my_model.train_iters(1000, print_every=10, save=True, batch_size=args.batchSize)
+    my_model.train_iters(10000, print_every=10, save=True, batch_size=args.batchSize)

@@ -212,8 +212,8 @@ class Map_Model:
         # remove previous tensorboard data first
         import subprocess as sub
         if (log):
-            p = sub.Popen(['rm', '-r', './logs'])
-            p.communicate()
+            # p = sub.Popen(['rm', '-r', './logs'])
+            # p.communicate()
             self.logger = Logger('./logs')
             print ("log in on")
         else:
@@ -237,7 +237,7 @@ class Map_Model:
 
 
         self.start_epoch = 0
-        self.optimizer = optim.Adam(self.model.parameters())#self.model.parameters(), lr=self.learning_rate, weight_decay=0.06)
+        self.optimizer = optim.Adadelta(self.model.parameters())#self.model.parameters(), lr=self.learning_rate, weight_decay=0.06)
         self.project_path = "."
         if resume_path is not None and load_weight:
             self.project_path = os.path.dirname(resume_path)
@@ -252,7 +252,7 @@ class Map_Model:
                 # del state_load["conv2.bias"]
                 state.update(state_load)
                 self.model.load_state_dict(state)
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
+                # self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
@@ -497,7 +497,7 @@ class Map_Model:
         self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10 , batch_size=batch_size, drop_last=True)
         n_iters = self.start_epoch + n_iters
         start = max (self.start_epoch-1, 0)
-        #self.validation(batch_size, start, save, plot=False)
+        self.validation(batch_size, start, save, plot=False)
         for iter in range(self.start_epoch, n_iters):
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
