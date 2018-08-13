@@ -23,6 +23,7 @@ from logger import Logger
 import torchvision.models as models
 
 from utils import model_utils
+from script.utility import CheckPointSaver
 
 from torch.utils.data import DataLoader
 
@@ -191,14 +192,34 @@ class DecoderNoRNN(nn.Module):
         return output_classes, output_poses
 
 class Map_Model:
-    def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
-        filename = os.path.join(self.project_path, filename)
-        torch.save(state, filename)
-        if is_best:
-            shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
+    # def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
+    #     filename = os.path.join(self.project_path, filename)
+    #     torch.save(state, filename)
+    #     if is_best:
+    #         shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
 
     def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None):
         self.start = time.time()
+
+        self.best_epoch_acc_objectness = None
+        self.best_epoch_acc_classes = None
+        self.best_epoch_loss = None
+        self.best_validation_acc_objecness = None
+        self.best_validation_acc_classes = None
+        self.best_validation_loss = None
+
+        self.checkpoint_saver = CheckPointSaver(['epoch_loss', 'epoch_accuracy_objectness', 'epoch_accuracy_classes',
+                                                'validation_loss', 'validation_accuracy_classes',
+                                                'validation_accuracy_objectness'],
+                                               best_metrics={'epoch_loss': self.best_epoch_loss,
+                                                             'epoch_accuracy_objectness': self.best_epoch_acc_objectness,
+                                                             'epoch_accuracy_classes': self.best_epoch_acc_classes,
+                                                             'validation_loss': self.best_validation_loss,
+                                                             'validation_accuracy_classes': self.best_validation_acc_classes,
+                                                             'validation_accuracy_objectness': self.best_validation_acc_objecness
+                                                             },
+                                                model_dir=os.path.dirname(resume_path))
+
         self.dataset = dataset_train
         self.dataset_validation = dataset_validation
         self.word_encoding = model_utils.WordEncoding()
@@ -480,15 +501,15 @@ class Map_Model:
         is_best = self.best_lost > epoch_loss_total
 
         if (save == True and plot == False):
-            self.save_checkpoint({
+            self.checkpoint_saver.save_checkpoint({
                 'epoch': iter + 1,
-                'model_dict': self.model.state_dict(),
-                'epoch_lost': epoch_loss_total,
+                'state_dict': self.model.state_dict(),
+                'validation_accuracy_classes': epoch_accuracy_classes,
+                'validation_accuracy_objectness': epoch_accuracy_objectness,
+                'validation_loss': epoch_loss_total,
                 'optimizer': self.optimizer.state_dict(),
-            }, is_best)
-        if is_best and plot == False:
-            print ("best epoch loss changed")
-            self.best_lost = epoch_loss_total
+            })
+
 
         print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
@@ -501,9 +522,14 @@ class Map_Model:
         for iter in range(self.start_epoch, n_iters):
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
-            # print('Iteration %s (%d %f%%) %.4f avg: %.4f acc classes:%.4f acc objectness:%.4f' %
-            #       (timeSince(self.start, (iter+1) / n_iters),
-            #       (iter + 1), (iter+1) / float(n_iters) * 100, epoch_loss_total,
-            #        epoch_loss_total/(len(self.dataloader)),epoch_accuracy_classes, epoch_accuracy_objectness))
+            if save:
+                self.checkpoint_saver.save_checkpoint({
+                    'epoch': iter + 1,
+                    'state_dict': self.model.state_dict(),
+                    'epoch_accuracy_classes': epoch_accuracy_classes,
+                    'epoch_accuracy_objectness': epoch_accuracy_objectness,
+                    'epoch_loss': epoch_loss_total,
+                    'optimizer': self.optimizer.state_dict(),
+                })
             print (iter, " finished\n\n")
             self.validation(batch_size, iter, save, plot=False)

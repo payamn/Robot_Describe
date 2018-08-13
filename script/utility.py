@@ -4,6 +4,11 @@ import time
 import rospy
 import cv2
 import numpy as np
+import sys
+import torch
+import os
+import shutil
+
 
 mapper_constant_val_x = 10
 mapper_constant_val_y = 10
@@ -11,6 +16,36 @@ intersection_r = 2.5
 degree_delta = 25
 LASER_SCAN_WINDOW = 40
 tf_listner = TransformListener()
+
+class CheckPointSaver:
+    def __init__(self, metrics, best_metrics=None, model_dir='checkpoints'):
+        self.best_metric_values = best_metrics
+        self.metric_names = metrics
+        self.model_dir = model_dir
+
+        if best_metrics is not None:
+            if len(metrics) != len(best_metrics):
+                sys.exit('Mismatch len of metric names and values')
+
+    def save_checkpoint(self, state, filename='checkpoint.pth.tar'):
+        for metric_name in (self.metric_names):
+            if metric_name in state:
+                best_metric_value = self.best_metric_values[metric_name]
+                is_best = False
+                if best_metric_value is None:
+                    is_best = True
+                elif 'loss' in metric_name:
+                    is_best = state[metric_name] < best_metric_value
+                elif 'acc' in metric_name:
+                    is_best = state[metric_name] > best_metric_value
+
+                if is_best:
+                    print ("saving", metric_name)
+                    torch.save(state, os.path.join(self.model_dir, filename))
+                    shutil.copyfile(os.path.join(self.model_dir, filename), os.path.join(self.model_dir, 'model_best_' + metric_name + '.pth.tar'))
+                    self.best_metric_values[metric_name] = state[metric_name]
+
+
 
 class Utility:
 
