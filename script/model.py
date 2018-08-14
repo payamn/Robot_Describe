@@ -269,12 +269,12 @@ class Map_Model:
                 self.start_epoch = checkpoint['epoch']
                 # self.best_lost = checkpoint['epoch_lost']
                 state = self.model.state_dict()
-                state_load = checkpoint['model_dict']
+                state_load = checkpoint['state_dict']
                 # del state_load["conv2.weight"]
                 # del state_load["conv2.bias"]
                 state.update(state_load)
                 self.model.load_state_dict(state)
-                # self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
