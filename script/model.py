@@ -4,6 +4,7 @@ import unicodedata
 import string
 import re
 import collections
+import thread
 import constants
 import os
 import random
@@ -501,15 +502,16 @@ class Map_Model:
         is_best = self.best_lost > epoch_loss_total
 
         if (save == True and plot == False):
-            self.checkpoint_saver.save_checkpoint({
-                'epoch': iter + 1,
-                'state_dict': self.model.state_dict(),
-                'validation_accuracy_classes': epoch_accuracy_classes,
-                'validation_accuracy_objectness': epoch_accuracy_objectness,
-                'validation_loss': epoch_loss_total,
-                'optimizer': self.optimizer.state_dict(),
-            })
-
+            thread.start_new_thread( self.checkpoint_saver.save_checkpoint,
+                                     ({
+                                         'epoch': iter + 1,
+                                         'state_dict': self.model.state_dict().copy(),
+                                         'validation_accuracy_classes': epoch_accuracy_classes,
+                                         'validation_accuracy_objectness': epoch_accuracy_objectness,
+                                         'validation_loss': epoch_loss_total,
+                                         'optimizer': self.optimizer.state_dict().copy(),
+                                     }, )
+                                     )
 
         print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
@@ -523,13 +525,14 @@ class Map_Model:
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             if save:
-                self.checkpoint_saver.save_checkpoint({
+                thread.start_new_thread(self.checkpoint_saver.save_checkpoint,
+               ({
                     'epoch': iter + 1,
-                    'state_dict': self.model.state_dict(),
+                    'state_dict': self.model.state_dict().copy(),
                     'epoch_accuracy_classes': epoch_accuracy_classes,
                     'epoch_accuracy_objectness': epoch_accuracy_objectness,
                     'epoch_loss': epoch_loss_total,
-                    'optimizer': self.optimizer.state_dict(),
-                })
+                    'optimizer': self.optimizer.state_dict().copy(),
+                },))
             print (iter, " finished\n\n")
             self.validation(batch_size, iter, save, plot=False)

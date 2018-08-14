@@ -29,6 +29,7 @@ class CheckPointSaver:
 
     def save_checkpoint(self, state, filename='checkpoint.pth.tar'):
         for metric_name in (self.metric_names):
+            torch.save(state, os.path.join(self.model_dir, filename))
             if metric_name in state:
                 best_metric_value = self.best_metric_values[metric_name]
                 is_best = False
@@ -41,7 +42,6 @@ class CheckPointSaver:
 
                 if is_best:
                     print ("saving", metric_name)
-                    torch.save(state, os.path.join(self.model_dir, filename))
                     shutil.copyfile(os.path.join(self.model_dir, filename), os.path.join(self.model_dir, 'model_best_' + metric_name + '.pth.tar'))
                     self.best_metric_values[metric_name] = state[metric_name]
 
