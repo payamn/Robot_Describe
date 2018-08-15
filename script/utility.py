@@ -28,8 +28,8 @@ class CheckPointSaver:
                 sys.exit('Mismatch len of metric names and values')
 
     def save_checkpoint(self, state, filename='checkpoint.pth.tar'):
+        torch.save(state, os.path.join(self.model_dir, filename))
         for metric_name in (self.metric_names):
-            torch.save(state, os.path.join(self.model_dir, filename))
             if metric_name in state:
                 best_metric_value = self.best_metric_values[metric_name]
                 is_best = False

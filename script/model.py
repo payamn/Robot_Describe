@@ -251,9 +251,10 @@ class Map_Model:
 
 
         # Model
-        # self.weight_loss = torch.ones([len(self.word_encoding.classes)])
-        # self.weight_loss[self.word_encoding.classes["noting"]] = 0.05  # nothing
-        self.criterion_classes = nn.NLLLoss()# weight=self.weight_loss.cuda())
+        self.weight_loss = torch.ones([len(self.word_encoding.classes)])
+        self.weight_loss[self.word_encoding.classes["close_room"]] = 0.05
+        self.weight_loss[self.word_encoding.classes["open_room"]] = 0.05
+        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
 
@@ -510,7 +511,7 @@ class Map_Model:
                                          'validation_accuracy_objectness': epoch_accuracy_objectness,
                                          'validation_loss': epoch_loss_total,
                                          'optimizer': self.optimizer.state_dict().copy(),
-                                     }, )
+                                     }, 'validation_checkpoint')
                                      )
 
         print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
