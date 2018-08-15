@@ -4,8 +4,8 @@
 	<arg name="odom_frame" default="odom" />
 	<!--<arg name="transform_pose" default="-30.150 -26.5" />-->
 	<!--<arg name="map_name" default="real_2" />-->
-	<arg name="transform_pose" default="-67.5 -19.875" />
-	<arg name="map_name" default="combinenormal" />
+	<arg name="transform_pose" default="-44.2 -44.25" />
+	<arg name="map_name" default="aces_map" />
 	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
 	<!--<arg name="map_name" default="combinenormal" />-->
 	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->
@@ -66,8 +66,6 @@
 
 	<!--Commented for test-->
 
-	<include file="$(find robot_describe)/launch/move_base_flex.launch" />
-	<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
 
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
 

@@ -132,6 +132,12 @@ class GenerateMap:
         p = subprocess.Popen("rosnode kill /slam_gmapping", stdout=None, shell=True)
         (output, err) = p.communicate()
         p.wait()
+        p = subprocess.Popen("rosnode kill /move_base_flex", stdout=None, shell=True)
+        (output, err) = p.communicate()
+        p.wait()
+        p = subprocess.Popen("rosnode kill /mbf_state_machine", stdout=None, shell=True)
+        (output, err) = p.communicate()
+        p.wait()
         time.sleep(0.5)
         # print "angle", angle*180.0/math.pi
         p = subprocess.Popen("roslaunch robot_describe gmapping.launch", stdout=None, shell=True)
@@ -268,7 +274,7 @@ class GenerateMap:
 
         self.calculate_objectness_language()
 
-        #self.save_pickle()
+        self.save_pickle()
 
     def calculate_objectness_language(self):
         if self.language is None:
@@ -381,7 +387,8 @@ class GenerateMap:
         print ("!!!!!read from pickle")
 
         while not self.is_init:
-            time.sleep(0.1)
+            time.sleep(0.5)
+            print ("wait for init")
         print ("read from pickle")
         self.points_description = pickle.load(
             open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
@@ -437,7 +444,7 @@ class GenerateMap:
     def point_generator(self):
         time.sleep(0.5)
         # we will first generate some short_range path and then long ones
-        short_range = 0
+        short_range = 20
         long_range = 40
         while True:
             random.seed(a=None)
@@ -458,7 +465,7 @@ class GenerateMap:
 
             self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
             self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+2])
-            self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
+            # self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
             time.sleep(0.5)
             start_index += 14
             position, quaternion = Utility.get_robot_pose("/map_server")
@@ -470,7 +477,10 @@ class GenerateMap:
 
             print "start index: ", start_index, " len: ", end_index - start_index
             while not self.is_init:
-                time.sleep(0.1)
+                time.sleep(0.5)
+                self.publish_point(self.coordinates[start_index + 10], self.coordinates[start_index + 12])
+                print ("not init yet publish point and waiting to init")
+
             counter = 30
             while (start_index < end_index):
                 # counter -= 1
@@ -489,7 +499,8 @@ class GenerateMap:
                 while Utility.distance_vector(position[:2], self.coordinates[start_index][:2]) > self.MAX_DISTANCE_TO_PUBLISH\
                         and counter_to_reset > 0:
                     time.sleep(0.5)
-                    self.publish_point(self.coordinates[start_index], self.coordinates[start_index+1])
+                    if counter_to_reset % 6 == 0:
+                        self.publish_point(self.coordinates[start_index + (30 - counter_to_reset)//3], self.coordinates[start_index + (30 - counter_to_reset)//3+1])
                     position, quaternion = Utility.get_robot_pose("/map_server")
                     print ("distance greater waiting for {} seconds".format(counter_to_reset*0.5))
                     counter_to_reset -= 1
@@ -498,16 +509,20 @@ class GenerateMap:
 
                 # if we are stuck
                 if counter_to_reset <= 0:
-                    # check if move base flex died
-                    nodes = os.popen('rosnode list').read().split()
+                    # # check if move base flex died
+                    nodes \
+                        = os.popen('rosnode list').read().split()
                     if "/move_base_flex" not in nodes:
-                        # start move base flex node
-                        p = subprocess.Popen("roslaunch robot_describe move_base_flex.launch", stdout=None, shell=True)
-                        (output, err) = p.communicate()
-                        p.wait()
-                        print ("move base flex launch again because it was died unexpectedly")
+                        print ("move_base flex died")
+                        exit(11)
+                    #     # start move base flex node
+                    #     p = subprocess.Popen("roslaunch robot_describe move_base_flex.launch", stdout=None, shell=True)
+                    #     print ("move base flex launching again because it was died unexpectedly")
+                    #     (output, err) = p.communicate()
+                    #     # p.wait()
                     break
             self.is_init = False
+            print ("problem initing again")
             time.sleep(0.1)
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
@@ -607,7 +622,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
-    parser.add_argument('--start_pickle', type=int, default=0)
+    parser.add_argument('--start_pickle', type=int, default=3040)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
@@ -620,6 +635,3 @@ if __name__ == '__main__':
         # threading.Thread(target=generate_map.get_local_map).start()
         threading.Thread(target=generate_map.point_generator).start()
         generate_map.read_from_pickle()
-
-
-

@@ -148,6 +148,7 @@ class ExecPath(smach.State):
             # print ("flag is :" + str(flag))
             if (flag is None or flag == 'ex_path_goal_cb') and not rospy.is_shutdown():
                 time.sleep(rate)
+                print ("insider ex_path")
                 continue
             else:
                 break

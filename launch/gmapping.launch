@@ -24,5 +24,8 @@
 	<node pkg="robot_describe" type="cost_map_node" name="cost_map_node" output="screen">
 			<rosparam command="load" file="$(find robot_describe)/config_nav/my_costmap.yaml"/>
 	</node>
+	<include file="$(find robot_describe)/launch/move_base_flex.launch" />
+	<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>
+
 
 </launch>

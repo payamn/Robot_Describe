@@ -1,7 +1,8 @@
 
-MAP_NAME = "combinenormal"
-X_OFFSET = -67.5
-Y_OFFSET =  -19.875
+MAP_NAME = "aces_map"
+
+X_OFFSET = -44.2
+Y_OFFSET = -44.25
 
 """
 To Run the code for new map:
