@@ -4,12 +4,12 @@
 	<arg name="odom_frame" default="odom" />
 	<!--<arg name="transform_pose" default="-30.150 -26.5" />-->
 	<!--<arg name="map_name" default="real_2" />-->
-	<arg name="transform_pose" default="-44.2 -44.25" />
-	<arg name="map_name" default="aces_map" />
+	<!--<arg name="transform_pose" default="-44.2 -44.25" />-->
+	<!--<arg name="map_name" default="aces_map" />-->
 	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
 	<!--<arg name="map_name" default="combinenormal" />-->
-	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->
-	<!--<arg name="map_name" default="real_1" />-->
+	<arg name="transform_pose" default="-35.000 -13.200" />
+	<arg name="map_name" default="real_1" />
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
@@ -33,7 +33,7 @@
 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
 		<!--<remap from="cmd_vel" to="robot_0/cmd_vel" />-->
-		<param name="scale_linear" value="0.75" />
+		<param name="scale_linear" value="100.75" />
 		<param name="scale_angular" value="0.5" />
 	</node>
 

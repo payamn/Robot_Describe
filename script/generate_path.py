@@ -67,7 +67,7 @@ class GeneratePath:
         self.counter += 1
         if self.counter % 100 == 0:
             pickle.dump(self.positions,
-                        open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/{}.p".format(MAP_NAME, self.idx), "wb"))
+                        open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/{}.p".format(MAP_NAME, MODE, self.idx), "wb"))
             print "saving", self.idx
             print self.positions
             self.positions = []
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     # if True, robot should move in map to generate points then by changing it to false it will move the robot along the path
     is_generate_path = True
 
-    pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
+    pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/".format(MAP_NAME, MODE)
 
     generate_path = GeneratePath(pickle_dir)
     if is_generate_path:

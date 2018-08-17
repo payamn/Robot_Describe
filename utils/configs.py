@@ -1,8 +1,9 @@
+MAP_NAME = "real_1"
+X_OFFSET = -35.000
+Y_OFFSET = -13.200
 
-MAP_NAME = "aces_map"
+MODE = "test" # train or test
 
-X_OFFSET = -44.2
-Y_OFFSET = -44.25
 
 """
 To Run the code for new map:
@@ -10,6 +11,10 @@ To Run the code for new map:
 1) run generate map with generate_point argument to first annotate intersections
 2) run generate path with is_generate_path = True and move robot in stage to generate path
 3) run generate map withour generate_point to generate data
+
+MAP_NAME = "aces_map"
+X_OFFSET = -44.2
+Y_OFFSET = -44.25
  
 MAP_NAME = "combinenormal"
 X_OFFSET = -67.5

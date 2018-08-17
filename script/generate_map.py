@@ -91,7 +91,7 @@ class GenerateMap:
 
         self.bridge = CvBridge()
 
-        pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}/".format(MAP_NAME)
+        pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/".format(MAP_NAME, MODE)
         generate_path = GeneratePath(pickle_dir)
         self.coordinates = generate_path.get_coordinates()
         # self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
@@ -210,7 +210,7 @@ class GenerateMap:
 
         data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language_with_objectness}
         pickle.dump(data,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/train/{}_{}.pkl".format(MAP_NAME, self.pickle_counter), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/{}/{}_{}.pkl".format(MODE, MAP_NAME, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     # def add_data(self): # add a data to local_map list
@@ -339,10 +339,9 @@ class GenerateMap:
             self.stop = True
             return
         else:
-            if math.fabs(odom_data.twist.twist.angular.z) > 0.5:
+            if math.fabs(odom_data.twist.twist.angular.z) > 0.7:
                 self.is_turning = 1
-            elif math.fabs(odom_data.twist.twist.angular.z) > 0.3 and self.is_turning < 2:
-                self.is_turning = 1
+
 
 
             self.stop = False
@@ -405,6 +404,10 @@ class GenerateMap:
     def append_to_pickle(self):
         self.points_description = pickle.load(
             open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
+
+        # to filter some of previos data:
+        # self.points_description = [a for a in self.points_description if a[2] == 'open_room' or a[2] == 'close_room']
+
         self.write_to_pickle()
 
     def write_to_pickle(self):
@@ -444,20 +447,34 @@ class GenerateMap:
     def point_generator(self):
         time.sleep(0.5)
         # we will first generate some short_range path and then long ones
-        short_range = 20
-        long_range = 40
+        short_range = 12
+        long_range = 5#10
+        number_of_short_run = short_range
+        number_of_long_run = long_range
+
+        start_short = 0
+        start_long = 0
+
         while True:
             random.seed(a=None)
             if short_range > 0:
                 short_range -= 1
-                start_index = random.randint(0, len(self.coordinates) - 100)
+                # start_index = random.randint(0, len(self.coordinates) - 100)
+                start_index = start_short
+                start_short += random.randint(((len(self.coordinates) - 100) // number_of_short_run)//2, (len(self.coordinates) - 100) // number_of_short_run)
                 end_index = min(random.randint(start_index + 50, start_index + 100)
-                                , len(self.coordinates)-2)
+                                , len(self.coordinates)-1)
+                if short_range == 0:
+                    end_index = len(self.coordinates) - 1
                 print ("{} short range remaining".format(short_range))
             elif long_range>0:
                 long_range -= 1
-                start_index = random.randint(0, len(self.coordinates) - 400)
-                end_index = random.randint(start_index + 200, len(self.coordinates) - 2)
+                # start_index = random.randint(0, len(self.coordinates) - 400)
+                start_index = start_long
+                start_long += random.randint(5, (len(self.coordinates) - 200) // number_of_long_run)
+                end_index = random.randint(start_index + 200, len(self.coordinates) - 1)
+                if long_range == 0:
+                    end_index = len(self.coordinates) - 1
                 print ("{} long range remaining".format(long_range))
             else:
                 print ("finished all for this map")
@@ -466,7 +483,7 @@ class GenerateMap:
             self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
             self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+2])
             # self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
-            time.sleep(0.5)
+            # time.sleep(0.5)
             start_index += 14
             position, quaternion = Utility.get_robot_pose("/map_server")
 
@@ -477,7 +494,7 @@ class GenerateMap:
 
             print "start index: ", start_index, " len: ", end_index - start_index
             while not self.is_init:
-                time.sleep(0.5)
+                # time.sleep(0.5)
                 self.publish_point(self.coordinates[start_index + 10], self.coordinates[start_index + 12])
                 print ("not init yet publish point and waiting to init")
 
@@ -622,7 +639,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
-    parser.add_argument('--start_pickle', type=int, default=3040)
+    parser.add_argument('--start_pickle', type=int, default=0)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
@@ -630,7 +647,8 @@ if __name__ == '__main__':
     generate_map = GenerateMap(start_pickle=args.start_pickle)
 
     if args.generate_point:
-        generate_map.write_to_pickle()
+        # generate_map.write_to_pickle()
+        generate_map.append_to_pickle()
     else:
         # threading.Thread(target=generate_map.get_local_map).start()
         threading.Thread(target=generate_map.point_generator).start()

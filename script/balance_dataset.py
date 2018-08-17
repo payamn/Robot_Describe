@@ -10,16 +10,21 @@ if __name__=='__main__':
     args = parser.parse_args()
     all_file = len(os.listdir(args.dataset_dir))
     counter_intersection = 0
+    counter_empty = 0
     for file in os.listdir(args.dataset_dir):
         with open(os.path.join(args.dataset_dir, file), 'rb') as f:
             repeat = False
             p_file = pickle.load(f)
-            for lang in p_file["language"]:
-                if 'junction' in lang[1]:
-                    repeat = True
-                    break
+            if not len(p_file["language"]):
+
+                counter_empty+=1
+                print "empty", counter_empty
+            # for lang in p_file["language"]:
+            #     if 'junction' in lang[1]:
+            #         repeat = True
+            #         break
             if repeat:
                 counter_intersection += 1
-                shutil.copy(os.path.join(args.dataset_dir, file), os.path.join(args.dataset_dir, file+"_copy"))
+                # shutil.copy(os.path.join(args.dataset_dir, file), os.path.join(args.dataset_dir, file+"_copy"))
                 # print (counter_intersection, "out of ", all_file)
     print(len(os.listdir(args.dataset_dir)))

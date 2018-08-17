@@ -35,6 +35,8 @@ class WaitForGoal(smach.State):
         return 'succeeded'
 
     def goal_callback(self, msg):
+        if self.subscriber is None:
+            return
         print "Received goal:"
         self.global_target_pose = msg
         self.flag = 1
