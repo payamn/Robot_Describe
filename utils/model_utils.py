@@ -25,12 +25,13 @@ class WordEncoding:
 
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
-        # self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
+        self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
+
     def len_classes(self):
         return len(self.classes)
 
-    # def get_parent_class(self, idx):
-    #     return self.parent_class_dic[idx]
+    def get_parent_class(self, idx):
+        return self.parent_class_dic[idx]
 
     def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes=None, target_poses=None, target_objectness=None):
         print ("\n\n")
@@ -87,6 +88,12 @@ class WordEncoding:
     def get_class_char(self, class_label):
         if class_label in self.classes_labels:
             return self.classes_labels[class_label]
+        else:
+            return -1
+
+    def get_class_char_parent(self, class_label):
+        if class_label < len(self.sentences):
+            return self.sentences[class_label]
         else:
             return -1
 

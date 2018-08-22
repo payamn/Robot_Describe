@@ -9,6 +9,7 @@ import constants
 import os
 import random
 import shutil
+from tqdm import tqdm
 import time
 import math
 import matplotlib.pyplot as plt
@@ -105,65 +106,50 @@ class Network_Map(nn.Module):
         self.resnet34 = nn.Sequential(*modules)
 
         # print (self.resnet34)
-        self.conv0 = nn.Conv2d(1, 16, 4)
-        self.relu = nn.LeakyReLU()
-        self.conv1 = nn.Conv2d(16, 16, 5)
-        self.conv2 = nn.Conv2d(16, 32, 5)
-        self.conv3 = nn.Conv2d(32, 32, 5)
-        self.conv4 = nn.Conv2d(32, 64, 7)
-        self.conv5 = nn.Conv2d(64, 64, 9 )
-        self.conv6 = nn.Conv2d(64, 32, 9 )
-        self.conv7 = nn.Conv2d(32, 32, 9 )
-        self.conv8 = nn.Conv2d(32, 16, 9 )
-        self.conv9 = nn.Conv2d(16, 24, 9 )
-        self.conv10 = nn.Conv2d(24, 24, 9 )
-        self.conv11 = nn.Conv2d(24, 24, 9 )
+        # self.conv0 = nn.Conv2d(1, 16, 4)
+        # self.relu = nn.LeakyReLU()
+        # self.conv1 = nn.Conv2d(16, 16, 5)
+        # self.conv2 = nn.Conv2d(16, 32, 5)
+        # self.conv3 = nn.Conv2d(32, 32, 5)
+        # self.conv4 = nn.Conv2d(32, 64, 7)
+        # self.conv5 = nn.Conv2d(64, 64, 9 )
+        # self.conv6 = nn.Conv2d(64, 32, 9 )
+        # self.conv7 = nn.Conv2d(32, 32, 9 )
+        # self.conv8 = nn.Conv2d(32, 16, 9 )
+        # self.conv9 = nn.Conv2d(16, 24, 9 )
+        # self.conv10 = nn.Conv2d(24, 24, 9 )
+        # self.conv11 = nn.Conv2d(24, 24, 9 )
 
-        self.max_pool = nn.MaxPool2d(4, stride=2)
-
-        self.numb_of_prediction = num_of_prediction
+        # self.max_pool = nn.MaxPool2d(4, stride=2)
+        #
+        # self.numb_of_prediction = num_of_prediction
 
         self.output_size = output_size
-        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*2*12)
+        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*7)
         # self.linear_pose = nn.Linear(25088,  2 * num_of_prediction)
         # self.linear_classes = nn.Linear(25088, self.output_size * num_of_prediction)
         # self.linear_classes_parents = nn.Linear(512*4*4 , self.len_parent * num_of_prediction)
 
-        self.soft_max = nn.LogSoftmax(dim=4)
+        self.soft_max = nn.LogSoftmax(dim=3)
         self.tanh = nn.Tanh()
     def forward(self, map):
         batch_size = map.size()[0]
         resnet = self.resnet34(map)
         predict = self.linear(resnet.view(batch_size,-1))
-        # conv = self.conv0 (map)
-        # conv = self.conv1 (self.relu(conv))
-        # conv = self.max_pool(self.relu(conv))
-        # conv = self.conv2 (self.relu(conv))
-        # conv = self.conv3 (self.relu(conv))
-        # conv = self.conv4 (self.relu(conv))
-        # conv = self.conv5 (self.relu(conv))
-        # conv = self.conv6 (self.relu(conv))
-        # conv = self.conv7 (self.relu(conv))
-        # conv = self.conv8 (self.relu(conv))
-        # conv = self.conv9 (self.relu(conv))
-        # conv = self.conv10 (self.relu(conv))
-        # # conv1 = self.conv1(resnet)
-        # predict = self.conv11(conv).permute(0,2,3,1)
-        # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
-        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 12)
+
+        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 7)
         # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
         # poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
         # classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
         # classes_out = self.soft_max(classes_out.view(batch_size, 1, self.numb_of_prediction, self.output_size))
-        classes_out = self.soft_max(predict[:,:,:,:,3:])
+        classes_out_door = self.soft_max(predict[:,:,:,2:4])
+        classes_out_intersection = self.soft_max(predict[:,:,:,4:])
 
-        # pose and objectness between 0 1:
-        pose_objectness = predict[:,:,:,:,0:3] #(self.tanh(predict[:,:,:,:,0:3]) + 1.0) / 2
+        # objectness between 0 1:
+        objectness = (self.tanh(predict[:,:,:,0:2]) + 1.0) / 2
 
-        poses = pose_objectness[:, :, :, :, 1:3]
-        objectness = pose_objectness[:, :, :, :, 0]
         # return poses_out, classes_out
-        return classes_out, poses, objectness
+        return classes_out_door, classes_out_intersection, objectness
 
 
 class DecoderNoRNN(nn.Module):
@@ -254,7 +240,8 @@ class Map_Model:
         self.weight_loss = torch.ones([len(self.word_encoding.classes)])
         self.weight_loss[self.word_encoding.classes["close_room"]] = 0.05
         self.weight_loss[self.word_encoding.classes["open_room"]] = 0.05
-        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
+        self.criterion_classes_intersection = nn.NLLLoss()#weight=self.weight_loss.cuda())
+        self.criterion_classes_door = nn.NLLLoss()#weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
 
@@ -292,31 +279,39 @@ class Map_Model:
             dataloader = self.dataloader_validation
             dataset = self.dataset_validation
         iter_data_loader = dataloader.__iter__()
-        print (mode, len(dataloader))
+        if iter == 0:
+            print (mode, len(dataloader))
         epoch_loss_total = 0
-        epoch_loss_classes = 0
+        epoch_loss_classes_door = 0
+        epoch_loss_classes_intersection = 0
         epoch_loss_poses = 0
         epoch_loss_objectness = 0
         epoch_accuracy_classes = []
+        epoch_accuracy_classes_door = []
+        epoch_accuracy_classes_intersection = []
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
-        accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
-        for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
-            loss_classes = 0
-            loss_poses = 0
+        accuracy_each_class = {i: [] for i in range(len(self.word_encoding.sentences))}
+        pbar = tqdm(total=len(dataloader))
+        for batch, (target_classes_door, target_classes_intersection, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
+            loss_classes_door = 0
+            loss_classes_intersection = 0
             loss_objectness = 0
+            loss_total = 0
             self.optimizer.zero_grad()
             batch_accuracy_classes = []
             batch_accuracy_poses = []
             local_map = Variable(local_map).cuda() if self.use_cuda else Variable(local_map)
             laser_map = Variable(laser_map).cuda() if self.use_cuda else Variable(laser_map)
-            target_classes = Variable(target_classes).cuda() if self.use_cuda else Variable(target_classes)
-            target_poses = Variable(target_poses).cuda() if self.use_cuda else Variable(target_poses)
+            target_classes_door = Variable(target_classes_door).cuda() if self.use_cuda else Variable(target_classes_door)
+            target_classes_intersection = Variable(target_classes_intersection).cuda() if self.use_cuda else Variable(target_classes_intersection)
+            # target_poses = Variable(target_poses).cuda() if self.use_cuda else Variable(target_poses)
             target_objectness = Variable(target_objectness).cuda() if self.use_cuda else Variable(target_objectness)
 
-            classes_out, poses, objectness = self.model(local_map)
+            classes_out_door, classes_out_intersection, objectness = self.model(local_map)
 
-            topv, topi = classes_out.data.topk(1)
+            topv_door, topi_door = classes_out_door.data.topk(1)
+            topv_intersection, topi_intersection = classes_out_intersection.data.topk(1)
 
             if plot:
                 self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], topi, poses, objectness,
@@ -327,102 +322,124 @@ class Map_Model:
             # word_encoded_pose = word_encoded_pose * b
 
             accuracy = []
+            accuracy_door = []
+            accuracy_intersection = []
             object_acc = []
             accuracy_class = 0
-            acc = topi== target_classes
-            for batch_idx in range (target_classes.shape[0]):
-                for x in range (target_classes.shape[1]):
-                    for y in range (target_classes.shape[2]):
-                        for anchor in range(target_classes.shape[3]):
+
+            acc_door = topi_door== target_classes_door
+            acc_intersection = topi_intersection== target_classes_intersection
+
+            for batch_idx in range (target_classes_door.shape[0]):
+                for x in range (target_classes_door.shape[1]):
+                    for y in range (target_classes_door.shape[2]):
+                        for anchor in range(2):
                             if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD):
                                 object_acc.append(1)
-                                if acc[batch_idx][x][y][anchor]:
-                                    accuracy.append(1)
-                                    accuracy_class = 1
+                                if anchor == 0:
+                                    if acc_door[batch_idx][x][y]:
+                                        accuracy.append(1)
+                                        accuracy_door.append(1)
+                                        accuracy_class = 1
+                                    else:
+                                        accuracy.append(0)
+                                        accuracy_door.append(0)
+                                        accuracy_class = 0
                                 else:
-                                    accuracy.append(0)
-                                    accuracy_class = 0
+                                    if acc_intersection[batch_idx][x][y]:
+                                        accuracy.append(1)
+                                        accuracy_intersection.append(1)
+                                        accuracy_class = 1
+                                    else:
+                                        accuracy.append(0)
+                                        accuracy_intersection.append(0)
+                                        accuracy_class = 0
                             elif (target_objectness[batch_idx][x][y][anchor].item()<= constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()<=constants.ACCURACY_THRESHOLD):
                                 continue
                             else:
+                                if anchor == 0:
+                                    accuracy_door.append(0)
+                                else:
+                                    accuracy_intersection.append(0)
+
                                 accuracy.append(0)
                                 object_acc.append(0)
                                 accuracy_class = 0
-                            accuracy_each_class[target_classes[batch_idx][x][y][anchor].item()].append(accuracy_class)
+                            if anchor == 0:
+                                accuracy_each_class[target_classes_door[batch_idx][x][y].item()].append(accuracy_class)
+                            else:
+                                accuracy_each_class[target_classes_intersection[batch_idx][x][y].item() + 2].append(accuracy_class)
 
             acc_classes = np.mean(accuracy)
+            acc_classes_door = np.mean(accuracy_door)
+            acc_classes_intersection = np.mean(accuracy_intersection)
             acc_objectness = np.mean(object_acc)
             epoch_accuracy_classes.append(acc_classes)
+            epoch_accuracy_classes_door.append(acc_classes_door)
+            epoch_accuracy_classes_intersection.append(acc_classes_intersection)
             epoch_accuracy_objectness.append(acc_objectness)
-            # for batch in range(batch_size):
-            #     for j in range(dataset.prediction_number):
-            #         accuracy = float(word_encoded_class[i][j] == topi[i][0][j][0])
-            #         index = int(word_encoded_class[i][j].cpu().data)
-            #         accuracy_each_class[index].append(accuracy)
-            #         if word_encoded_class.data[i][j] == self.word_encoding.classes["noting"] and accuracy == 1:
-            #             continue
-            #         else:
-            #             batch_accuracy_classes.append(accuracy)
-            #             epoch_accuracy_classes.append(accuracy)
-            #             distance = self.distance(word_encoded_pose[i][j].view(1, 2), output_poses[i][j].view(1, 2))
-            #             # distance = distance.squeeze(1)
-            #             # accuracy_poses = torch.mean(distance)
-            #             batch_accuracy_poses.append(distance.item())
-            #             epoch_accuracy_poses.append(distance.item())
-            # output_classes = output_classes.permute(0, 3, 1, 2)
-            # output_classes_parent = output_classes_parent.permute(0,3,1,2)
-            # word_encoded_class = word_encoded_class.unsqueeze(1)
-            # word_encoded_class_parent = word_encoded_class_parent.unsqueeze(1)
-            # output_classes = output_classes.view(output_classes.size(2), output_classes.size(3))
-            # output_poses = output_poses.view(output_poses.size(0), output_poses.size(2), output_poses.size(3))
-            # word_encoded_class = word_encoded_class.squeeze(0)
 
-            # for i in range (output_classes.size(1)):
             mask_objectness = target_objectness >= constants.ACCURACY_THRESHOLD
 
 
             mask_objectness = mask_objectness.type(torch.cuda.LongTensor) if self.use_cuda else mask_objectness.type(torch.LongTensor)
             if self.use_cuda:
                 mask_objectness.cuda()
-            target_classes = target_classes.squeeze(4)
-            target_classes = target_classes * mask_objectness
+            target_classes_door = target_classes_door.squeeze(3)
+            target_classes_door = target_classes_door * mask_objectness[:, :, :, 0]
 
-            mask_objectness = mask_objectness.unsqueeze(4)
-            mask_poses = mask_objectness.repeat(1,1,1,1,2).type(torch.float)
-            if self.use_cuda:
-                mask_poses = mask_poses.cuda()
-            poses = poses * mask_poses
-            target_poses = target_poses * mask_poses
+            target_classes_intersection = target_classes_intersection.squeeze(3)
+            target_classes_intersection = target_classes_intersection * mask_objectness[:, :, :, 1]
 
-            mask_classes = mask_objectness.repeat(1,1,1,1,9).type(torch.float)
+
+            # mask_objectness = mask_objectness.unsqueeze(4)
+            # mask_poses = mask_objectness.repeat(1,1,1,1,2).type(torch.float)
+            # if self.use_cuda:
+            #     mask_poses = mask_poses.cuda()
+            # poses = poses * mask_poses
+            # target_poses = target_poses * mask_poses
+
+            mask_classes_door = mask_objectness[:, :, :, 0].unsqueeze(3).repeat(1,1,1,2).type(torch.float)
             if self.use_cuda:
-                mask_classes = mask_classes.cuda()
-            classes_out = classes_out * mask_classes
-            classes_out = classes_out.permute(0, 4, 1, 2, 3)
-            target_classes = target_classes
+                mask_classes_door = mask_classes_door.cuda()
+            classes_out_door = classes_out_door * mask_classes_door
+            classes_out_door = classes_out_door.permute(0, 3, 1, 2)
+
+            mask_classes_intersection = mask_objectness[:, :, :, 1].unsqueeze(3).repeat(1, 1, 1, 3).type(torch.float)
+            if self.use_cuda:
+                mask_classes_intersection = mask_classes_intersection.cuda()
+            classes_out_intersection = classes_out_intersection * mask_classes_intersection
+            classes_out_intersection = classes_out_intersection.permute(0, 3, 1, 2)
+
             # landa_class = 1
-            loss_classes = self.criterion_classes(classes_out, target_classes)  # +\
+            loss_classes_door = self.criterion_classes_door(classes_out_door, target_classes_door)
+            loss_classes_intersection = self.criterion_classes_intersection(classes_out_intersection, target_classes_intersection)  # +\
+
             # (1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
 
-            loss_poses = self.criterion_poses(poses, target_poses)
             # landa = 1.0 / 4
             # loss_total = landa * loss_poses + (1 - landa) * loss_classes
 
 
             loss_objectness = self.criterion_objectness(objectness, target_objectness)
-            loss_total = (130*loss_classes+loss_poses + 100*loss_objectness)/231
+            loss_total = (loss_classes_door+loss_classes_intersection+ loss_objectness)/3.0
+            epoch_loss_classes_door += loss_classes_door.item() / classes_out_door.size()[0]
+            epoch_loss_classes_intersection += loss_classes_intersection.item() / classes_out_intersection.size()[0]
 
-            epoch_loss_classes += loss_classes.item() / classes_out.size()[0]
-            epoch_loss_poses += loss_poses.item() / classes_out.size()[0]
-            epoch_loss_objectness += loss_objectness.item() / classes_out.size()[0]
+            # epoch_loss_poses += loss_poses.item() / classes_out.size()[0]
+            epoch_loss_objectness += loss_objectness.item() / (classes_out_intersection.size()[0]*2)
             epoch_loss_total += loss_total.item() #epoch_loss_classes + epoch_loss_poses + epoch_loss_objectness
             # batch_accuracy_classes = np.mean(batch_accuracy_classes)
             # batch_accuracy_poses = np.mean(batch_accuracy_poses)
             # loss = loss/batch_size
             print_loss_avg = epoch_loss_total / ((batch + 1))
-            print(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
-            iter + 1, timeSince(self.start, (batch + 1) / (len(dataloader)))
-            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes))
+            pbar.set_description(
+                mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_door:%.4f acc_intersection:%.4f' % (
+            iter, timeSince(self.start, (batch + 1) / (len(dataloader)))
+            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes_door, acc_classes_intersection)
+            )
+
+            pbar.update(1)
 
             if mode== "train":
                 loss_total.backward()
@@ -430,10 +447,10 @@ class Map_Model:
             if self.logger is not None:
                 info = {
                     'batch_loss'+mode: loss_total.item(),
-                    'batch_accuracy_classes'+mode: acc_classes,
+                    'batch_accuracy_classes_door'+mode: acc_classes_door,
+                    'batch_accuracy_classes_intersection'+mode: acc_classes_intersection,
                     'batch_accuracy_objecnes'+mode: acc_objectness,
                     # 'batch_accuracy_poses'+mode: batch_accuracy_poses,
-                    'loss_poses'+mode: loss_poses.item(),
                     'batch_loss'+mode: loss_total.item(),
                 }
 
@@ -441,26 +458,40 @@ class Map_Model:
                     self.logger.scalar_summary(tag, value, iter * (batch_size) + batch)
             else:
                 print ("no logger")
+
         epoch_accuracy_classes = np.mean(epoch_accuracy_classes)
+        epoch_accuracy_classes_door = np.mean(epoch_accuracy_classes_door)
+        epoch_accuracy_classes_intersection = np.mean(epoch_accuracy_classes_intersection)
         epoch_accuracy_objectness = np.mean(epoch_accuracy_objectness)
         # epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
         if self.logger is not None:
             info = {
                 'Epoch_loss_'+mode: epoch_loss_total / len(dataloader),
                 'Epoch_accuracy_classes_'+mode: epoch_accuracy_classes,
-                'epoch_accuracy_objectness'+mode: epoch_accuracy_objectness,
+                'Epoch_accuracy_classes_door_'+mode: epoch_accuracy_classes_door,
+                'Epoch_accuracy_classes_intersection_'+mode: epoch_accuracy_classes_intersection,
+                'epoch_accuracy_objectness_'+mode: epoch_accuracy_objectness,
                 # 'Epoch_accuracy_poses_'+mode: epoch_accuracy_poses,
                 'epoch_loss_objectness_'+mode: epoch_loss_objectness / len(dataloader),
-                'epoch_loss_classes_'+mode: epoch_loss_classes / len(dataloader),
-                'epoch_loss_poses_'+mode: epoch_loss_poses / len(dataloader)
+                'epoch_loss_classes_door_'+mode: epoch_loss_classes_door / len(dataloader),
+                'epoch_loss_classes_intersetion_'+mode: epoch_loss_classes_intersection / len(dataloader),
             }
-            for i in range(len(self.word_encoding.classes)):
-                info["Epoch_" + mode + "_" + self.word_encoding.get_class_char(i)] = np.mean(accuracy_each_class[i])
+            for i in range(len(self.word_encoding.sentences)):
+                info["Epoch_" + mode + "_" + self.word_encoding.get_class_char_parent(i)] = np.mean(accuracy_each_class[i])
 
             for tag, value in info.items():
                 self.logger.scalar_summary(tag, value, iter + 1)
-        print (mode+ " Epoch %d acc_classes: %.6f acc_objectness: %.6f "%(iter, epoch_accuracy_classes, epoch_accuracy_objectness))
-
+        # print (mode+ " Epoch %d acc_classes: %.6f acc_objectness: %.6f "%(iter, epoch_accuracy_classes, epoch_accuracy_objectness))
+        pbar.set_description\
+                (
+                    mode+' Epoch %d %s (%.2f%%) %.6f acc_classes:%.4f acc_objectness:%.4f acc_door:%.4f acc_intersection:%.4f' % (
+                    iter, timeSince(self.start, (batch + 1) / (len(dataloader))),
+                    float((batch + 1)) / (len(dataloader)) * 100,  epoch_loss_total / len(dataloader),
+                    epoch_accuracy_classes, epoch_accuracy_objectness, epoch_accuracy_classes_door,
+                    epoch_accuracy_classes_intersection)
+                )
+        pbar.close()
+        print("")
         return epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total
 
 
@@ -514,7 +545,7 @@ class Map_Model:
                                      }, 'validation_checkpoint')
                                      )
 
-        print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
+        # print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
 
     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
@@ -535,5 +566,5 @@ class Map_Model:
                     'epoch_loss': epoch_loss_total,
                     'optimizer': self.optimizer.state_dict().copy(),
                 },))
-            print (iter, " finished\n\n")
+            # print (iter, " finished\n\n")
             self.validation(batch_size, iter, save, plot=False)

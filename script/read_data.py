@@ -39,14 +39,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--validation', metavar='validation', type=str,
         help='validation dataset')
-    parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))
+    parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "test"))
     parser.add_argument(
         '--resume', metavar='resume', type=str,
         help='resume checkpoint')
     parser.set_defaults(resume=os.path.join(rospkg.RosPack().get_path('robot_describe'),'checkpoints','checkpoint.pth.tar'))
 
     parser.add_argument(
-        '--batchSize', metavar='batchSize', type=int, default=50,
+        '--batchSize', metavar='batchSize', type=int, default=40,
         help='batch size')
 
     parser.add_argument(

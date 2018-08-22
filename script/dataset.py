@@ -123,11 +123,11 @@ class Map_Dataset(Dataset):
             if 0.1 < x < 0.9 and 0.1 < y < 0.9:
                 x = x * constants.GRID_LENGTH
                 y = y * constants.GRID_LENGTH
-                word_encoded.append((word[0], (x, y), word[2], word[3], angle, transform))
+                word_encoded.append((self.word_encoding.get_parent_class(word[0]), (x, y), word[2], word[3], angle, transform))
 
 
         # width , height, two anchors, objectness + (x, y) + classes
-        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 4], dtype=torch.float)
+        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 4], dtype=torch.float)
 
         for word in word_encoded:
 
@@ -147,7 +147,7 @@ class Map_Dataset(Dataset):
 
 
             try:
-                target[x][y][word[2]][0] = word[3]
+                target[x][y][word[2]] = word[3]
             except Exception as e:
                 print e
                 print ("target shape: ", target.shape)
@@ -155,15 +155,16 @@ class Map_Dataset(Dataset):
                 print ("x:, y:, (1-x_center) * 3:", x, y, (1 - x_center) * 3)
                 exit(2)
             # x_center , y_center
-            target[x][y][word[2]][1] = x_center
-            target[x][y][word[2]][2] = y_center
+            # target[x][y][word[2]][1] = x_center
+            # target[x][y][word[2]][2] = y_center
 
             # class
-            target[x][y][word[2]][3] = word[0]
+            target[x][y][2 + word[2]] = word[0] - word[2] * 2
 
-        target_classes = target[ :, :, :, 3:]
-        target_poses = target[ :, :, :, 1:3]
-        target_objectness = target[ :, :, :, 0]
+        target_classes_door = target[ :, :, 2:3]
+        target_classes_intersection = target[ :, :, 3:]
+        # target_poses = target[ :, :, :, 1:3]
+        target_objectness = target[ :, :, 0:2]
 
         laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
         laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
@@ -180,7 +181,7 @@ class Map_Dataset(Dataset):
 
         # local_maps = torch.from_numpy(local_maps).type(torch .FloatTensor).unsqueeze(0)
 
-        return target_classes.type(torch.LongTensor), target_poses, target_objectness, local_maps, laser_scans_map
+        return target_classes_door.type(torch.LongTensor), target_classes_intersection.type(torch.LongTensor), target_objectness, local_maps, laser_scans_map
 
 
 
