@@ -27,8 +27,6 @@ from utils import model_utils
 from script.utility import CheckPointSaver
 
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-
 
 SOS_token = 0
 EOS_token = 1
@@ -254,8 +252,8 @@ class Map_Model:
 
         # Model
         self.weight_loss = torch.ones([len(self.word_encoding.classes)])
-        self.weight_loss[self.word_encoding.classes["close_room"]] = 0.0005
-        self.weight_loss[self.word_encoding.classes["open_room"]] = 0.0005
+        self.weight_loss[self.word_encoding.classes["close_room"]] = 0.05
+        self.weight_loss[self.word_encoding.classes["open_room"]] = 0.05
         self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
@@ -283,7 +281,7 @@ class Map_Model:
             else:
                 print("=> no checkpoint found at '{}'".format(resume_path))
 
-    def     model_forward(self, batch_size, mode, iter, plot=False):
+    def model_forward(self, batch_size, mode, iter, plot=False):
         iter_data_loader = None
         dataset = None
         dataloader = None
@@ -294,8 +292,7 @@ class Map_Model:
             dataloader = self.dataloader_validation
             dataset = self.dataset_validation
         iter_data_loader = dataloader.__iter__()
-        if iter == 0:
-            print (mode, len(dataloader))
+        print (mode, len(dataloader))
         epoch_loss_total = 0
         epoch_loss_classes = 0
         epoch_loss_poses = 0
@@ -304,8 +301,6 @@ class Map_Model:
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
         accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
-        pbar = tqdm(total=len(dataloader))
-
         for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
             loss_classes = 0
             loss_poses = 0
@@ -334,10 +329,7 @@ class Map_Model:
             accuracy = []
             object_acc = []
             accuracy_class = 0
-
-
             acc = topi== target_classes
-
             for batch_idx in range (target_classes.shape[0]):
                 for x in range (target_classes.shape[1]):
                     for y in range (target_classes.shape[2]):
@@ -386,19 +378,13 @@ class Map_Model:
             # word_encoded_class = word_encoded_class.squeeze(0)
 
             # for i in range (output_classes.size(1)):
-            target_classes = target_classes.squeeze(4)
-
             mask_objectness = target_objectness >= constants.ACCURACY_THRESHOLD
 
-            # if  mode == "train": # with probability 10/11
-            #
-            #     mask_classes = target_classes >= 2
-            #
-            #     mask_objectness = mask_classes * mask_objectness
 
             mask_objectness = mask_objectness.type(torch.cuda.LongTensor) if self.use_cuda else mask_objectness.type(torch.LongTensor)
             if self.use_cuda:
                 mask_objectness.cuda()
+            target_classes = target_classes.squeeze(4)
             target_classes = target_classes * mask_objectness
 
             mask_objectness = mask_objectness.unsqueeze(4)
@@ -424,26 +410,21 @@ class Map_Model:
 
 
             loss_objectness = self.criterion_objectness(objectness, target_objectness)
-            loss_total = (330*loss_classes+loss_poses + 100*loss_objectness)/431
+            loss_total = (130*loss_classes+loss_poses + 100*loss_objectness)/231
 
             epoch_loss_classes += loss_classes.item() / classes_out.size()[0]
             epoch_loss_poses += loss_poses.item() / classes_out.size()[0]
             epoch_loss_objectness += loss_objectness.item() / classes_out.size()[0]
             epoch_loss_total += loss_total.item() #epoch_loss_classes + epoch_loss_poses + epoch_loss_objectness
+            # batch_accuracy_classes = np.mean(batch_accuracy_classes)
+            # batch_accuracy_poses = np.mean(batch_accuracy_poses)
+            # loss = loss/batch_size
             print_loss_avg = epoch_loss_total / ((batch + 1))
-
-            pbar.set_description(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
+            print(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
             iter + 1, timeSince(self.start, (batch + 1) / (len(dataloader)))
             , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes))
 
-
-            pbar.update(1)
-            # print_loss_avg = epoch_loss_total / ((batch + 1))
-            # print(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
-            # iter + 1, timeSince(self.start, (batch + 1) / (len(dataloader)))
-            # , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes))
-
-            if mode== "train" and loss_total.item()>0:
+            if mode== "train":
                 loss_total.backward()
                 self.optimizer.step()
             if self.logger is not None:
@@ -478,14 +459,7 @@ class Map_Model:
 
             for tag, value in info.items():
                 self.logger.scalar_summary(tag, value, iter + 1)
-        pbar.set_description (
-            mode + ' Epoch %d %s (%.2f%%) %.6f acc_classes:%.4f acc_objectness:%.4f ' % (
-            iter, timeSince(self.start, (batch + 1) / (len(dataloader))),
-            float((batch + 1)) / (len(dataloader)) * 100, epoch_loss_total / len(dataloader),
-            epoch_accuracy_classes, epoch_accuracy_objectness)
-            )
-        pbar.close()
-        print("")
+        print (mode+ " Epoch %d acc_classes: %.6f acc_objectness: %.6f "%(iter, epoch_accuracy_classes, epoch_accuracy_objectness))
 
         return epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total
 
@@ -540,7 +514,7 @@ class Map_Model:
                                      }, 'validation_checkpoint')
                                      )
 
-        # print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
+        print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
 
     def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
@@ -549,13 +523,6 @@ class Map_Model:
         start = max (self.start_epoch-1, 0)
         self.validation(batch_size, start, save, plot=False)
         for iter in range(self.start_epoch, n_iters):
-            if iter >= 500:
-                self.dataset.set_augmentation_level(3)
-            elif iter >= 300:
-                self.dataset.set_augmentation_level(2)
-            elif iter >= 100:
-                self.dataset.set_augmentation_level(1)
-
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             if save:
@@ -568,5 +535,5 @@ class Map_Model:
                     'epoch_loss': epoch_loss_total,
                     'optimizer': self.optimizer.state_dict().copy(),
                 },))
-            # print (iter, " finished\n\n")
+            print (iter, " finished\n\n")
             self.validation(batch_size, iter, save, plot=False)

@@ -73,7 +73,15 @@ class Map_Dataset(Dataset):
 
         self.word_encoding = model_utils.WordEncoding()
         self.augmentation = augmentation
+        self.augmentation_level = 0
         print (_dataset_directory, "augmentation: ", augmentation)
+
+    def set_augmentation_level(self, number):
+        if number != self.augmentation_level:
+            self.augmentation_level = number
+            print ("augmentation level changed to: ", self.augmentation_level)
+
+
 
     def __len__(self):
         return len(self.files)
@@ -93,12 +101,17 @@ class Map_Dataset(Dataset):
         transform = None
         resize = None
         if self.augmentation:
-            # max angle transform -+30 degree
-            angle = random.randint(-300, 300)/10.0
-            # max transform pose is +0.2 out of 1
-            transform = (random.randint(-2000, 0)/10000.0, random.randint(-2000, 2000)/10000.0)
-            # resize between 0.85x to 1.15x
-            resize = random.randint(85,115)/100.0
+            if self.augmentation_level > 0:
+                # max transform pose is +0.2 out of 1
+                transform = (random.randint(-2000, 0) / 10000.0, random.randint(-2000, 2000) / 10000.0)
+
+            if self.augmentation_level > 1:
+                # max angle transform -+30 degree
+                angle = random.randint(-300, 300)/10.0
+
+            if self.augmentation_level > 2:
+                # resize between 0.85x to 1.15x
+                resize = random.randint(85,115)/100.0
 
 
         word_encoded = []

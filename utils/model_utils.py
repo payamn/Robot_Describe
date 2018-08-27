@@ -54,23 +54,23 @@ class WordEncoding:
                             cv.circle(copy_backtorgb, pose, 5, (0, 0, 255))
                             cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
-                        # if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
-                        #     pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
-                        #     pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
-                        #     pose = pose.astype(int)
-                        #     pose = tuple(pose)
-                        #     predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
-                        #     cv.circle(backtorgb, pose, 4, (255, 0, 100))
-                        #     cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+                        if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
+                            pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
+                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
+                            pose = pose.astype(int)
+                            pose = tuple(pose)
+                            predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
+                            cv.circle(backtorgb, pose, 4, (255, 0, 100))
+                            cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
             cv.namedWindow("map")
             cv.namedWindow("laser map")
             cv.imshow("map", copy_backtorgb)
             print ("predict:")
-            # print predict
+            print predict
             print ("target")
             print (target)
             cv.imshow("laser map", backtorgb_laser)
-            cv.waitKey()
+            cv.waitKey(1    )
 
             plt.show()
 
@@ -159,8 +159,10 @@ def get_area(x, y, space, local_map):
 
 
 def get_local_map(
-        map_info, map_data, language=None, image_publisher=None, image_publisher_annotated=None, map_topic_name="map", dilate=False):
+        map_info, map_data, language=None, image_publisher=None, image_publisher_annotated=None, map_topic_name="map", dilate=False, map_dim=None):
 
+    if map_dim is None:
+        map_dim = constants.LOCAL_DISTANCE
     position, quaternion = Utility.get_robot_pose(map_topic_name)
     plus_x = map_info.origin.position.y * map_info.resolution
     plus_y = map_info.origin.position.x * map_info.resolution
@@ -171,7 +173,7 @@ def get_local_map(
                                                 quaternion[2], quaternion[3])
 
     image = Utility.sub_image(map_data, map_info.resolution, (position[0], position[1]), z,
-                              constants.LOCAL_DISTANCE, constants.LOCAL_DISTANCE, only_forward=True, dilate=dilate)
+                              map_dim, map_dim, only_forward=True, dilate=dilate)
 
     if image_publisher:
         image_publisher.publish(CvBridge().cv2_to_imgmsg(image))

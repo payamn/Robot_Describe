@@ -1,0 +1,68 @@
+<launch>
+	<arg name="base_frame" default="base_link" />
+	<arg name="odom_frame" default="odom" />
+	<arg name="map_frame" default="map" />
+
+	<arg name="laser_frame" default="laser" />
+
+	<arg name="scan_topic" default="scan" />
+
+
+	<!-- <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0.19 0.149 0.0 -1.5708 3.1416 $(arg base_frame) $(arg laser_frame) 10"/> -->
+
+	
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+
+
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping">
+    <remap from="map" to="gmap"/>
+
+    <rosparam>
+      odom_frame: odom
+      base_frame: base_link
+      map_frame: map
+
+      map_update_interval: 0.5 # Publish new map
+
+      maxUrange: 18 # Should be just less than sensor range
+      maxRange: 18.1 # Should be just greater than sensor range
+      particles: 80 # Increased from 80
+
+      # Update frequencies
+      linearUpdate: 0.05
+      angularUpdate: 0.05
+      temporalUpdate: 0.1
+      resampleThreshold: 0.9
+
+      # Initial Map Size
+      xmin: -100.0
+      ymin: -100.0
+      xmax: 100.0
+      ymax: 100.0
+      delta: 0.08
+
+      # All default
+      sigma: 0.05
+      kernelSize: 1
+      lstep: 0.05
+      astep: 0.05
+      iterations: 1
+      lsigma: 0.075
+      ogain: 3.0
+      lskip: 1
+      llsamplerange: 0.01
+      llsamplestep: 0.01
+      lasamplerange: 0.005
+      lasamplestep: 0.005
+
+    </rosparam>
+    <remap from="scan" to="$(arg scan_topic)"/>
+  </node>
+
+  <node pkg="robot_describe" type="cost_map_node" name="cost_map_node" output="screen">
+			<rosparam command="load" file="$(find robot_describe)/config_nav/my_costmap.yaml"/>
+	</node>
+	<include file="$(find robot_describe)/launch/move_base_flex.launch" />
+
+
+</launch>

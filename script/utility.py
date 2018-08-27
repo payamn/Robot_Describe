@@ -41,7 +41,7 @@ class CheckPointSaver:
                     is_best = state[metric_name] > best_metric_value
 
                 if is_best:
-                    print ("saving", metric_name)
+                    # print ("saving", metric_name)
                     shutil.copyfile(os.path.join(self.model_dir, filename), os.path.join(self.model_dir, 'model_best_' + metric_name + '.pth.tar'))
                     self.best_metric_values[metric_name] = state[metric_name]
 
