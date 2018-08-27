@@ -133,14 +133,14 @@ class Map_Dataset(Dataset):
                 x += transform[0]
                 y += transform[1]
 
-            if 0.1 < x < 0.9 and 0.1 < y < 0.9:
+            if 0.05 < x < 0.95 and 0.05 < y < 0.95 and word[0] < 2:
                 x = x * constants.GRID_LENGTH
                 y = y * constants.GRID_LENGTH
                 word_encoded.append((word[0], (x, y), word[2], word[3], angle, transform))
 
 
         # width , height, two anchors, objectness + (x, y) + classes
-        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 4], dtype=torch.float)
+        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 1, 4], dtype=torch.float)
 
         for word in word_encoded:
 
@@ -164,7 +164,7 @@ class Map_Dataset(Dataset):
             except Exception as e:
                 print e
                 print ("target shape: ", target.shape)
-                print ("word: ", len(word))
+                print ("word: ", word)
                 print ("x:, y:, (1-x_center) * 3:", x, y, (1 - x_center) * 3)
                 exit(2)
             # x_center , y_center

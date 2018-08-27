@@ -107,26 +107,13 @@ class Network_Map(nn.Module):
         self.resnet34 = nn.Sequential(*modules)
 
         # print (self.resnet34)
-        self.conv0 = nn.Conv2d(1, 16, 4)
-        self.relu = nn.LeakyReLU()
-        self.conv1 = nn.Conv2d(16, 16, 5)
-        self.conv2 = nn.Conv2d(16, 32, 5)
-        self.conv3 = nn.Conv2d(32, 32, 5)
-        self.conv4 = nn.Conv2d(32, 64, 7)
-        self.conv5 = nn.Conv2d(64, 64, 9 )
-        self.conv6 = nn.Conv2d(64, 32, 9 )
-        self.conv7 = nn.Conv2d(32, 32, 9 )
-        self.conv8 = nn.Conv2d(32, 16, 9 )
-        self.conv9 = nn.Conv2d(16, 24, 9 )
-        self.conv10 = nn.Conv2d(24, 24, 9 )
-        self.conv11 = nn.Conv2d(24, 24, 9 )
 
         self.max_pool = nn.MaxPool2d(4, stride=2)
 
         self.numb_of_prediction = num_of_prediction
 
         self.output_size = output_size
-        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*2*12)
+        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*1*5)
         # self.linear_pose = nn.Linear(25088,  2 * num_of_prediction)
         # self.linear_classes = nn.Linear(25088, self.output_size * num_of_prediction)
         # self.linear_classes_parents = nn.Linear(512*4*4 , self.len_parent * num_of_prediction)
@@ -152,7 +139,7 @@ class Network_Map(nn.Module):
         # # conv1 = self.conv1(resnet)
         # predict = self.conv11(conv).permute(0,2,3,1)
         # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
-        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 12)
+        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 1, 5)
         # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
         # poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
         # classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
@@ -225,6 +212,7 @@ class Map_Model:
 
         self.dataset = dataset_train
         self.dataset_validation = dataset_validation
+        self.dataloader_validation = None
         self.word_encoding = model_utils.WordEncoding()
         self.learning_rate = learning_rate
         self.best_lost = sys.float_info.max
@@ -256,7 +244,7 @@ class Map_Model:
         self.weight_loss = torch.ones([len(self.word_encoding.classes)])
         self.weight_loss[self.word_encoding.classes["close_room"]] = 0.0005
         self.weight_loss[self.word_encoding.classes["open_room"]] = 0.0005
-        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
+        self.criterion_classes = nn.NLLLoss()#weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
 
@@ -283,7 +271,7 @@ class Map_Model:
             else:
                 print("=> no checkpoint found at '{}'".format(resume_path))
 
-    def     model_forward(self, batch_size, mode, iter, plot=False):
+    def model_forward(self, batch_size, mode, iter, plot=False):
         iter_data_loader = None
         dataset = None
         dataloader = None
@@ -304,7 +292,7 @@ class Map_Model:
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
         accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
-        pbar = tqdm(total=len(dataloader))
+        pbar = tqdm(total=len(dataloader)+1)
 
         for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
             loss_classes = 0
@@ -408,12 +396,11 @@ class Map_Model:
             poses = poses * mask_poses
             target_poses = target_poses * mask_poses
 
-            mask_classes = mask_objectness.repeat(1,1,1,1,9).type(torch.float)
+            mask_classes = mask_objectness.repeat(1,1,1,1,2).type(torch.float)
             if self.use_cuda:
                 mask_classes = mask_classes.cuda()
             classes_out = classes_out * mask_classes
             classes_out = classes_out.permute(0, 4, 1, 2, 3)
-            target_classes = target_classes
             # landa_class = 1
             loss_classes = self.criterion_classes(classes_out, target_classes)  # +\
             # (1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
@@ -480,10 +467,11 @@ class Map_Model:
                 self.logger.scalar_summary(tag, value, iter + 1)
         pbar.set_description (
             mode + ' Epoch %d %s (%.2f%%) %.6f acc_classes:%.4f acc_objectness:%.4f ' % (
-            iter, timeSince(self.start, (batch + 1) / (len(dataloader))),
+            iter+1, timeSince(self.start, (batch + 1) / (len(dataloader))),
             float((batch + 1)) / (len(dataloader)) * 100, epoch_loss_total / len(dataloader),
             epoch_accuracy_classes, epoch_accuracy_objectness)
             )
+        pbar.update(1)
         pbar.close()
         print("")
 
@@ -519,8 +507,8 @@ class Map_Model:
 
         if dataset is None:
             dataset = self.dataset_validation
-        self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=5 , batch_size=batch_size, drop_last=True)
-
+        if self.dataloader_validation is None:
+            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=num_workers, batch_size=batch_size, drop_last=True)
         epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
         # print('validation loss: %.4f class_accuracy: %.4f' %
@@ -543,8 +531,9 @@ class Map_Model:
         # print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
 
-    def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
-        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10 , batch_size=batch_size, drop_last=True)
+    def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True, num_workers=6):
+        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=num_workers , batch_size=batch_size, drop_last=True)
+        self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=num_workers, batch_size=batch_size, drop_last=True)
         n_iters = self.start_epoch + n_iters
         start = max (self.start_epoch-1, 0)
         self.validation(batch_size, start, save, plot=False)
