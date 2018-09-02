@@ -6,12 +6,20 @@
 	<arg name="laser_frame" default="laser" />
 
 	<arg name="scan_topic" default="scan" />
+    <param name="use_sim_time" value="true"/>
 
 
 	<!-- <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0.19 0.149 0.0 -1.5708 3.1416 $(arg base_frame) $(arg laser_frame) 10"/> -->
 
 	
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+
+  <node name="map_server" pkg="map_server" type="map_server"
+		args="$(find robot_describe)/map.yaml" output="screen">
+		<param name="frame_id" value="map_server" />
+  </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 -1  map map_server 20" />
 
 
   <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping">
@@ -22,31 +30,31 @@
       base_frame: base_link
       map_frame: map
 
-      map_update_interval: 0.5 # Publish new map
+      map_update_interval: 0.1 # Publish new map
 
-      maxUrange: 18 # Should be just less than sensor range
-      maxRange: 18.1 # Should be just greater than sensor range
-      particles: 80 # Increased from 80
+      maxUrange: 8.0 # Should be just less than sensor range
+      maxRange: 8.1 # Should be just greater than sensor range
+      particles: 120 # Increased from 80
 
       # Update frequencies
-      linearUpdate: 0.05
-      angularUpdate: 0.05
-      temporalUpdate: 0.1
-      resampleThreshold: 0.9
+      linearUpdate: 0.2
+      angularUpdate: 0.2
+      temporalUpdate: 1.0
+      resampleThreshold: 0.1
 
       # Initial Map Size
       xmin: -100.0
       ymin: -100.0
       xmax: 100.0
       ymax: 100.0
-      delta: 0.08
+      delta: 0.05
 
       # All default
-      sigma: 0.05
+      sigma: 0.01
       kernelSize: 1
       lstep: 0.05
       astep: 0.05
-      iterations: 1
+      iterations: 5
       lsigma: 0.075
       ogain: 3.0
       lskip: 1

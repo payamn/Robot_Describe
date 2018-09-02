@@ -256,7 +256,11 @@ class Map_Model:
             self.project_path = os.path.dirname(resume_path)
             if os.path.isfile(resume_path):
                 print("=> loading checkpoint '{}'".format(resume_path))
-                checkpoint = torch.load(resume_path)
+                if self.use_cuda:
+                    checkpoint = torch.load(resume_path)
+                else:
+                    checkpoint = torch.load(resume_path, map_location = 'cpu')
+
                 self.start_epoch = checkpoint['epoch']
                 # self.best_lost = checkpoint['epoch_lost']
                 state = self.model.state_dict()
@@ -265,7 +269,7 @@ class Map_Model:
                 # del state_load["conv2.bias"]
                 state.update(state_load)
                 self.model.load_state_dict(state)
-                # self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
@@ -312,7 +316,7 @@ class Map_Model:
             topv, topi = classes_out.data.topk(1)
 
             if plot:
-                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], topi, poses, objectness,
+                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], (topi, topv), poses, objectness,
                                                     target_classes, target_poses, target_objectness)
             # b = word_encoded_class != self.word_encoding.classes["noting"]
             # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
@@ -508,7 +512,7 @@ class Map_Model:
         if dataset is None:
             dataset = self.dataset_validation
         if self.dataloader_validation is None:
-            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=num_workers, batch_size=batch_size, drop_last=True)
+            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=5, batch_size=batch_size, drop_last=True)
         epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
         # print('validation loss: %.4f class_accuracy: %.4f' %

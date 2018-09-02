@@ -9,7 +9,6 @@ import torch
 import os
 import shutil
 
-
 mapper_constant_val_x = 10
 mapper_constant_val_y = 10
 intersection_r = 2.5
@@ -140,9 +139,10 @@ class Utility:
         number_of_try = 5
         while number_of_try > 0:
             try:
-                t = tf_listner.getLatestCommonTime("/base_link", map_topic)
+                # t = tf_listner.getLatestCommonTime("/base_laser", map_topic)
                 t = rospy.Time(0)
-                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_link", t)
+
+                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_laser", t)
             except Exception as e:
                 print (e)
                 number_of_try -= 1
