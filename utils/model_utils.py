@@ -1,8 +1,10 @@
 import cv2 as cv
 from cv_bridge import CvBridge
 import numpy as np
+from geometry_msgs.msg import Pose, PoseArray
+import tf
 import matplotlib.pyplot as plt
-
+from tf import TransformerROS
 from script.utility import Utility
 from script import constants
 
@@ -13,6 +15,8 @@ from nav_msgs.srv import GetMap
 import rospy
 
 import time
+
+
 
 class WordEncoding:
     def __init__(self):
@@ -26,25 +30,115 @@ class WordEncoding:
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
         # self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
+        #TODO: Move next line
+        self.publisher = {
+            "close_room" : rospy.Publisher('close_rooms', PoseArray, queue_size=10, latch=True),
+            "open_room": rospy.Publisher('open_rooms', PoseArray, queue_size=10, latch=True)
+        }
+        self.publish_list = {
+            "close_room": [],
+            "open_room": []
+        }
+        self.tf_ros = TransformerROS()
+
     def len_classes(self):
         return len(self.classes)
 
     # def get_parent_class(self, idx):
     #     return self.parent_class_dic[idx]
 
+    def closest_node(self, node, nodes, limit):
+        return_nodes = []
+        if len(nodes) == 0:
+            return return_nodes
+        nodes_array = np.asarray(nodes)[:, 0:2]
+        dist = np.sqrt(np.sum((nodes_array - node[0:2]) ** 2, axis=1))
+        for index, node_dist in enumerate(dist):
+            if node_dist < limit:
+                return_nodes.append((index, node_dist))
+        return return_nodes
+
+    def appropriate_point_class(self, point, objectness,class_lable):
+        not_publish_point = 0
+        for mode in self.classes:
+            if mode not in self.publish_list:
+                continue
+            closest_points = self.closest_node(point, self.publish_list[mode], 0.98)
+            if len(closest_points) == 0:
+                continue
+            for close_point in closest_points:
+                if class_lable == self.classes[mode]:
+                    point = ((point[0] + self.publish_list[mode][close_point[0]][0])/2,
+                             (point[1] + self.publish_list[mode][close_point[0]][1])/2)
+                    objectness = (self.publish_list[mode][close_point[0]][2] + objectness)/2
+                    self.publish_list[mode].__delitem__(close_point[0])
+                    not_publish_point += 1
+                elif class_lable != self.classes[mode] and close_point[1] < 0.6 :
+                    if objectness < self.publish_list[mode][close_point[0]][2]:
+                        self.publish_list[mode][close_point[0]][2] = self.publish_list[mode][close_point[0]][2] / 2.0
+                        not_publish_point -= 1
+
+                    else:
+                        objectness = objectness / 2.0
+                        self.publish_list[mode].__delitem__(close_point[0])
+
+        if not_publish_point < 0:
+            return None
+        return (point[0], point[1], objectness, class_lable)
+
+    def publish_point_around_robot(self, points):
+        """
+
+        :param points: dictionary of class and points
+        """
+        position_robot, quaternion_robot = Utility.get_robot_pose("map")
+        mat44 = self.tf_ros.fromTranslationRotation(position_robot, quaternion_robot)
+
+        for mode in self.classes:
+            if mode in points:
+                for point in points[mode]:
+                    point_xy = tuple(np.dot(mat44, np.array([point[0], point[1], 0, 1.0])))[:2]
+                    point = self.appropriate_point_class(point_xy, point[2], self.classes[mode])
+                    if point is not None:
+                        self.publish_list[mode].append(point)
+        pose_msgs = {}
+        for mode in self.classes:
+            if mode not in self.publish_list:
+                continue
+            pose_msgs[mode] = PoseArray()
+            pose_msgs[mode].header.frame_id = 'map'
+            pose_msgs[mode].header.stamp = rospy.Time.now()
+            for point in self.publish_list[mode]:
+                if point[2] < 0.2:
+                    continue
+                pose_msg = Pose()
+                pose_msg.position.x = point[0]
+                pose_msg.position.y = point[1]
+                pose_msg.position.z = 0
+                w, x, y, z = Utility.toQuaternion(
+                   0, 0, 0)
+                pose_msg.orientation.w = w
+                pose_msg.orientation.x = x
+                pose_msg.orientation.y = y
+                pose_msg.orientation.z = z
+                pose_msgs[mode].poses.append(pose_msg)
+
+            self.publisher[mode].publish(pose_msgs[mode])
+
     def visualize_map(self, map_data, laser_map,predict_classes, predict_poses, predict_objectness, target_classes=None, target_poses=None, target_objectness=None):
         print ("\n\n")
-        for batch in range(predict_classes.shape[0]):
+        for batch in range(predict_classes[0].shape[0]):
             predict = []
             target = []
             # map_data = np.reshape(map_data[batch].cpu().data.numpy(),(map_data.shape[1], map_data.shape[2], 1))
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             copy_backtorgb = backtorgb.copy()
-            for x in range (predict_classes.shape[1]):
-                for y in range (predict_classes.shape[2]):
-                    for anchor in range(predict_classes.shape[3]):
-                        if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= 0.3:
+            publish_poses = {"close_room":[], "open_room":[]}
+            for x in range (predict_classes[0].shape[1]):
+                for y in range (predict_classes[0].shape[2]):
+                    for anchor in range(predict_classes[0].shape[3]):
+                        if target_classes is not None and target_objectness[batch][x][y][anchor].item() >= constants.ACCURACY_THRESHOLD:
                             pose = (target_poses[batch][x][y][anchor].cpu().numpy())
                             pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / target_classes.shape[1])
                             pose = pose.astype(int)
@@ -54,23 +148,35 @@ class WordEncoding:
                             cv.circle(copy_backtorgb, pose, 5, (0, 0, 255))
                             cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
-                        if (predict_objectness[batch][x][y][anchor].item()>= 0.3):
+                        if (predict_objectness[batch][x][y][anchor].item()>= constants.ACCURACY_THRESHOLD):
                             pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
-                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes.shape[1])
+                            pose_map = (pose + np.asarray([x, y])) * ( float(constants.LOCAL_MAP_DIM) / predict_classes[0].shape[1]) -np.asarray([0, constants.LOCAL_MAP_DIM/2.0])
+                            pose_map = (pose_map[0], pose_map[1], predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item()))
+                            # pose_map[1] = -pose_map[1]
+                            pose = (pose + np.asarray([x, y])) * ( float(backtorgb.shape[1]) / predict_classes[0].shape[1])
                             pose = pose.astype(int)
                             pose = tuple(pose)
-                            predict.append((pose, self.get_class_char(predict_classes[batch][x][y][anchor].item())))
-                            cv.circle(backtorgb, pose, 4, (255, 0, 100))
-                            cv.circle(backtorgb_laser, pose, 4, (255, 0, 100))
+                            predict.append((pose, self.get_class_char(predict_classes[0][batch][x][y][anchor].item()),
+                                            predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item())))
+                            color = (255, 0, 100)
+                            if predict_classes[0][batch][x][y][anchor].item() == 0:
+                                publish_poses["open_room"].append(pose_map)
+                                color = (100,0,255)
+                            elif predict_classes[0][batch][x][y][anchor].item()  == 1:
+                                publish_poses["close_room"].append(pose_map)
+                                color = (255,0,0)
+                            cv.circle(backtorgb, pose, 4, color)
+                            cv.circle(backtorgb_laser, pose, 4, color)
+            self.publish_point_around_robot(publish_poses)
             cv.namedWindow("map")
             cv.namedWindow("laser map")
-            cv.imshow("map", copy_backtorgb)
+            cv.imshow("map", backtorgb)
             print ("predict:")
             print predict
             print ("target")
             print (target)
             cv.imshow("laser map", backtorgb_laser)
-            cv.waitKey(1    )
+            cv.waitKey(1        )
 
             plt.show()
 
@@ -200,3 +306,4 @@ def get_local_map(
     #
     #     image_publisher_annotated.publish(CvBridge().cv2_to_imgmsg(image))
     return local_map
+

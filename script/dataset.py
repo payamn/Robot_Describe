@@ -97,6 +97,8 @@ class Map_Dataset(Dataset):
         laser_scans = dic_data["laser_scan"]
         local_maps = dic_data["local_maps"]
 
+        laser_scans_temp = np.asarray(laser_scans)
+        laser_scans = laser_scans_temp+ np.random.rand(laser_scans_temp.shape[0]) / (constants.MAX_RANGE_LASER * 7.0)
         angle = None
         transform = None
         resize = None
