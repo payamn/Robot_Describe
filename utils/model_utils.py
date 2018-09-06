@@ -31,14 +31,9 @@ class WordEncoding:
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
         # self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
         #TODO: Move next line
-        self.publisher = {
-            "close_room" : rospy.Publisher('close_rooms', PoseArray, queue_size=10, latch=True),
-            "open_room": rospy.Publisher('open_rooms', PoseArray, queue_size=10, latch=True)
-        }
-        self.publish_list = {
-            "close_room": [],
-            "open_room": []
-        }
+        self.publisher = {x: rospy.Publisher(x, PoseArray, queue_size=10, latch=True) for x in self.classes}
+        self.publish_list = {x: [] for x in self.classes}
+
         self.tf_ros = TransformerROS()
 
     def len_classes(self):
@@ -63,24 +58,39 @@ class WordEncoding:
         for mode in self.classes:
             if mode not in self.publish_list:
                 continue
-            closest_points = self.closest_node(point, self.publish_list[mode], 0.98)
+            closest_points = self.closest_node(point, self.publish_list[mode], 0.85)
             if len(closest_points) == 0:
                 continue
+            del_nodes = []
             for close_point in closest_points:
                 if class_lable == self.classes[mode]:
                     point = ((point[0] + self.publish_list[mode][close_point[0]][0])/2,
                              (point[1] + self.publish_list[mode][close_point[0]][1])/2)
                     objectness = (self.publish_list[mode][close_point[0]][2] + objectness)/2
-                    self.publish_list[mode].__delitem__(close_point[0])
+                    del_nodes.append(close_point[0])
                     not_publish_point += 1
                 elif class_lable != self.classes[mode] and close_point[1] < 0.6 :
                     if objectness < self.publish_list[mode][close_point[0]][2]:
-                        self.publish_list[mode][close_point[0]][2] = self.publish_list[mode][close_point[0]][2] / 2.0
+                        self.publish_list[mode][close_point[0]] = (self.publish_list[mode][close_point[0]][0],
+                                                                   self.publish_list[mode][close_point[0]][1],
+                                                                   self.publish_list[mode][close_point[0]][2] / 2.0,
+                                                                   self.publish_list[mode][close_point[0]][3]
+                                                                   )
+                        objectness = objectness / 2.0
                         not_publish_point -= 1
 
                     else:
-                        objectness = objectness / 2.0
-                        self.publish_list[mode].__delitem__(close_point[0])
+                        objectness = objectness / 1.5
+                        if self.publish_list[mode][close_point[0]][2] < 0.2:
+                            del_nodes.append(close_point[0])
+                        else:
+                            self.publish_list[mode][close_point[0]] = (self.publish_list[mode][close_point[0]][0],
+                                                                       self.publish_list[mode][close_point[0]][1],
+                                                                       self.publish_list[mode][close_point[0]][2] / 2.0,
+                                                                       self.publish_list[mode][close_point[0]][3]
+                                                                       )
+            for node in del_nodes:
+                self.publish_list[mode].__delitem__(node)
 
         if not_publish_point < 0:
             return None
@@ -134,7 +144,7 @@ class WordEncoding:
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             copy_backtorgb = backtorgb.copy()
-            publish_poses = {"close_room":[], "open_room":[]}
+            publish_poses = {x: [] for x in self.classes}
             for x in range (predict_classes[0].shape[1]):
                 for y in range (predict_classes[0].shape[2]):
                     for anchor in range(predict_classes[0].shape[3]):
@@ -149,6 +159,8 @@ class WordEncoding:
                             cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
                         if (predict_objectness[batch][x][y][anchor].item()>= constants.ACCURACY_THRESHOLD):
+                            if anchor ==1 :
+                                print anchor
                             pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
                             pose_map = (pose + np.asarray([x, y])) * ( float(constants.LOCAL_MAP_DIM) / predict_classes[0].shape[1]) -np.asarray([0, constants.LOCAL_MAP_DIM/2.0])
                             pose_map = (pose_map[0], pose_map[1], predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item()))
@@ -159,11 +171,12 @@ class WordEncoding:
                             predict.append((pose, self.get_class_char(predict_classes[0][batch][x][y][anchor].item()),
                                             predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item())))
                             color = (255, 0, 100)
+                            class_name = self.classes_labels[predict_classes[0][batch][x][y][anchor].item()]
+                            publish_poses[class_name].append(pose_map)
+
                             if predict_classes[0][batch][x][y][anchor].item() == 0:
-                                publish_poses["open_room"].append(pose_map)
                                 color = (100,0,255)
                             elif predict_classes[0][batch][x][y][anchor].item()  == 1:
-                                publish_poses["close_room"].append(pose_map)
                                 color = (255,0,0)
                             cv.circle(backtorgb, pose, 4, color)
                             cv.circle(backtorgb_laser, pose, 4, color)
