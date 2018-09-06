@@ -267,7 +267,11 @@ class Map_Model:
                 state_load = checkpoint['state_dict']
                 # del state_load["conv2.weight"]
                 # del state_load["conv2.bias"]
-                state.update(state_load)
+                try:
+                    state.update(state_load)
+                except Exception as e:
+                    print ("problem in loading: ", e)
+
                 self.model.load_state_dict(state)
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
