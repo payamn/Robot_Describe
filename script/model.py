@@ -97,7 +97,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 class Network_Map(nn.Module):
-    def __init__(self, input_size, output_size, max_length=MAX_LENGTH, num_of_prediction=5, len_parent=4, training=True):
+    def __init__(self, input_size, output_size, max_length=MAX_LENGTH, num_of_prediction=3, len_parent=4, training=True):
         super(Network_Map, self).__init__()
         self.input_size = input_size[0]
         output_feature = input_size[1]
@@ -113,7 +113,7 @@ class Network_Map(nn.Module):
         self.numb_of_prediction = num_of_prediction
 
         self.output_size = output_size
-        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*1*5)
+        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+self.numb_of_prediction))
         # self.linear_pose = nn.Linear(25088,  2 * num_of_prediction)
         # self.linear_classes = nn.Linear(25088, self.output_size * num_of_prediction)
         # self.linear_classes_parents = nn.Linear(512*4*4 , self.len_parent * num_of_prediction)
@@ -139,7 +139,7 @@ class Network_Map(nn.Module):
         # # conv1 = self.conv1(resnet)
         # predict = self.conv11(conv).permute(0,2,3,1)
         # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
-        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 1, 5)
+        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 1, (3+self.numb_of_prediction))
         # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
         # poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
         # classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
@@ -267,13 +267,37 @@ class Map_Model:
                 state_load = checkpoint['state_dict']
                 # del state_load["conv2.weight"]
                 # del state_load["conv2.bias"]
-                try:
-                    state.update(state_load)
-                except Exception as e:
-                    print ("problem in loading: ", e)
-
+                remove_comp = [
+                    "linear.bias", "linear.weight",
+                    # "conv0.weight", "conv0.bias", "conv1.weight",
+                    # "conv1.bias", "conv2.weight", "conv2.bias", "conv3.weight", "conv3.bias", "conv4.weight",
+                    # "conv4.bias", "conv5.weight", "conv5.bias", "conv6.weight", "conv6.bias", "conv7.weight",
+                    # "conv7.bias", "conv8.weight", "conv8.bias", "conv9.weight", "conv9.bias",
+                    # "conv10.weight", "conv10.bias", "conv11.weight", "conv11.bias"
+                ]
+                for comp in remove_comp:
+                    del state_load[comp]
+                state.update(state_load)
                 self.model.load_state_dict(state)
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
+
+
+                # try:
+                #     state.update(state_load)
+                #     self.model.load_state_dict(state)
+                #
+                # except Exception as e:
+                #     print("problem in loading: ", e)
+                #     to_continue = raw_input("do you want to fix by removing those wait?(y/n)")
+                #     if to_continue == "y":
+                #         remove_comp = ["linear.bias", "linear.weight", "conv0.weight", "conv0.bias", "conv1.weight", "conv1.bias", "conv2.weight", "conv2.bias", "conv3.weight", "conv3.bias", "conv4.weight", "conv4.bias", "conv5.weight", "conv5.bias", "conv6.weight", "conv6.bias", "conv7.weight", "conv7.bias", "conv8.weight", "conv8.bias", "conv9.weight", "conv9.bias", "conv10.weight", "conv10.bias", "conv11.weight", "conv11.bias"]
+                #         for comp in remove_comp:
+                #             del state_load[comp]
+                #             del state[comp]
+                #     state.update(state_load)
+                #     self.model.load_state_dict(state)
+
+
+                # self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
@@ -404,7 +428,7 @@ class Map_Model:
             poses = poses * mask_poses
             target_poses = target_poses * mask_poses
 
-            mask_classes = mask_objectness.repeat(1,1,1,1,2).type(torch.float)
+            mask_classes = mask_objectness.repeat(1,1,1,1,3).type(torch.float)
             if self.use_cuda:
                 mask_classes = mask_classes.cuda()
             classes_out = classes_out * mask_classes

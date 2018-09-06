@@ -179,11 +179,9 @@ class WordEncoding:
             plt.show()
 
     def get_object_class(self, object):
+        # no anchor anymore
         if object[1] in self.classes:
-            prefer_anchor = 1
-            if "room" in object[1]:
-                prefer_anchor = 0
-            return self.classes[object[1]], object[2], prefer_anchor, object[3]
+            return self.classes[object[1]], object[2], 0, object[3]
         else:
             print (object, 0)
             print ("set_objcet_class class not found skiping")

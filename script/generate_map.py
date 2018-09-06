@@ -448,7 +448,7 @@ class GenerateMap:
         time.sleep(0.5)
         # we will first generate some short_range path and then long ones
         short_range = 12
-        long_range = 5#10
+        long_range = 8#10
         number_of_short_run = short_range
         number_of_long_run = long_range
 
@@ -646,9 +646,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
-    parser.add_argument('--start_pickle', type=int, default=0)
+    parser.add_argument('--start_pickle', type=int, default=1200)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
-    parser.set_defaults(generate_point=True)
+    parser.set_defaults(generate_point=False)
     args = parser.parse_args()
 
     generate_map = GenerateMap(start_pickle=args.start_pickle)

@@ -108,8 +108,8 @@ class Map_Dataset(Dataset):
                 transform = (random.randint(-2000, 0) / 10000.0, random.randint(-2000, 2000) / 10000.0)
 
             if self.augmentation_level > 1:
-                # max angle transform -+30 degree
-                angle = random.randint(-300, 300)/10.0
+                # max angle transform -+35 degree
+                angle = random.randint(-350, 350)/10.0
 
             if self.augmentation_level > 2:
                 # resize between 0.85x to 1.15x
@@ -135,7 +135,7 @@ class Map_Dataset(Dataset):
                 x += transform[0]
                 y += transform[1]
 
-            if 0.05 < x < 0.95 and 0.05 < y < 0.95 and word[0] < 2:
+            if 0.05 < x < 0.95 and 0.05 < y < 0.95:
                 x = x * constants.GRID_LENGTH
                 y = y * constants.GRID_LENGTH
                 word_encoded.append((word[0], (x, y), word[2], word[3], angle, transform))

@@ -1,6 +1,6 @@
-MAP_NAME = "real_1"
-X_OFFSET = -35.000
-Y_OFFSET = -13.200
+MAP_NAME = "combinenormal"
+X_OFFSET = -67.5
+Y_OFFSET =  -19.875
 
 MODE = "train" # train or test
 
