@@ -14,7 +14,7 @@ def add_current_path():
 #import rospy
 # from robot import Robot
 from model import Map_Model
-import rospkg
+#import rospkg
 import os
 from dataset import Laser_Dataset, Map_Dataset
 import constants
@@ -34,16 +34,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--train', metavar='train', type=str,
         help='train dataset')
-    parser.set_defaults(train=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "train"))
+#    parser.set_defaults(train=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "train"))
 
     parser.add_argument(
         '--validation', metavar='validation', type=str,
         help='validation dataset')
-    parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))
+ #   parser.set_defaults(validation=os.path.join(rospkg.RosPack().get_path('robot_describe'), "data", "dataset", "validation"))
     parser.add_argument(
         '--resume', metavar='resume', type=str,
         help='resume checkpoint')
-    parser.set_defaults(resume=os.path.join(rospkg.RosPack().get_path('robot_describe'),'checkpoints','checkpoint.pth.tar'))
+   # parser.set_defaults(resume=os.path.join(rospkg.RosPack().get_path('robot_describe'),'checkpoints','checkpoint.pth.tar'))
 
     parser.add_argument(
         '--batchSize', metavar='batchSize', type=int, default=50,
@@ -83,4 +83,4 @@ if __name__ == '__main__':
     # my_model.visualize_dataset(args.batchSize, map_dataset_train)
     # exit(0)
 
-    my_model.train_iters(10000, print_every=10, save=True, batch_size=args.batchSize, num_workers=6)
+    my_model.train_iters(10000, print_every=10, save=True, batch_size=args.batchSize, num_workers=8)

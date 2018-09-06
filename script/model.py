@@ -330,7 +330,7 @@ class Map_Model:
                 for x in range (target_classes.shape[1]):
                     for y in range (target_classes.shape[2]):
                         for anchor in range(target_classes.shape[3]):
-                            if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD):
+                            if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD_PREDICTION):
                                 object_acc.append(1)
                                 if acc[batch_idx][x][y][anchor]:
                                     accuracy.append(1)
@@ -338,7 +338,7 @@ class Map_Model:
                                 else:
                                     accuracy.append(0)
                                     accuracy_class = 0
-                            elif (target_objectness[batch_idx][x][y][anchor].item()<= constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()<=constants.ACCURACY_THRESHOLD):
+                            elif (target_objectness[batch_idx][x][y][anchor].item()<= constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()<=constants.ACCURACY_THRESHOLD_PREDICTION):
                                 continue
                             else:
                                 accuracy.append(0)
