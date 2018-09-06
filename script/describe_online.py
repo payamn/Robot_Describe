@@ -59,11 +59,11 @@ class DescribeOnline:
         topv, topi = classes_out.data.topk(1)
 
         if plot:
-            self.map_model.word_encoding.visualize_map(local_map[:, 0, :, :], laser_map[:, 0, :, :], topi, poses, objectness)
+            self.map_model.word_encoding.visualize_map(local_map[:, 0, :, :], laser_map[:, 0, :, :], (topi, topv), poses, objectness)
     def callback_odom(self, odom):
         # print ("odom:", odom.twist.twist.angular.z)
-        if math.fabs(odom.twist.twist.angular.z) > 0.2:
-            self.is_turning = 4
+        if math.fabs(odom.twist.twist.angular.z) > 0.5:
+            self.is_turning = 1
 
     def callback_map_image(self, image):
         # print ("in call back image")
@@ -89,7 +89,7 @@ class DescribeOnline:
     def get_local_map(self, annotated_publish=True):
         self.map["info"] = model_utils.get_map_info()
         img = model_utils.get_local_map(
-            self.map["info"], self.map["data"], image_publisher=self.image_pub, dilate=False,
+            self.map["info"], self.map["data"], image_publisher=self.image_pub, dilate=True,
             map_dim=constants.LOCAL_MAP_DIM)
         self.local_map = cv2.flip(img, 0)
 
@@ -108,10 +108,7 @@ if __name__=="__main__":
 
 
 
-    parser.add_argument(
-        '--cuda', dest='isCuda', action='store_false',
-        help='is cuda')
-    parser.set_defaults(isCuda=True)
+
 
     args = parser.parse_args()
 
@@ -119,6 +116,6 @@ if __name__=="__main__":
 
 
 
-    describe_online = DescribeOnline(args.resume, args.isCuda)
+    describe_online = DescribeOnline(args.resume, torch.cuda.is_available())
     rospy.Subscriber("/scan", LaserScan, describe_online.callback_laser_scan, queue_size=1)
     rospy.spin()

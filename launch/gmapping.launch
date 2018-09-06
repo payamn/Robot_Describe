@@ -1,7 +1,6 @@
 <launch>
     <arg name="base_frame" default="base_link" />
 	<arg name="odom_frame" default="odom" />
-
     <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 		<remap from="scan" to="base_scan"/>
 		<remap from="map" to="gmap"/>
