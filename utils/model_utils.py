@@ -22,10 +22,8 @@ class WordEncoding:
     def __init__(self):
         self.sos = "[sos]"
         self.eos = "[eos]"
-        self.sentences = ["close_room", "open_room", "4_junction" ,"t_junction", "corner"]
-        classes = ["close_room", "open_room",
-                        "corner_left", "corner_right",
-                        "t_junction_right_forward", "t_junction_right_left", "t_junction_left_forward", "t_junction", "4_junction"]
+        # self.sentences = ["close_room", "open_room", "corridor"]
+        classes = ["close_room", "open_room", "corridor"]
 
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}

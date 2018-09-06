@@ -49,7 +49,7 @@ class GenerateMap:
         self.points_description = []
         self.tf_listner = TransformListener()
         self.word_encoding = model_utils.WordEncoding()
-        self.sentences = self.word_encoding.sentences
+        self.sentences = self.word_encoding.classes.keys()
         self.classes = self.word_encoding.classes
         self.sentences_index = 0
         self.max_distace = 3
@@ -310,9 +310,9 @@ class GenerateMap:
             elif (x < image.shape[0] * .30 and image.shape[1] * .3 < y < image.shape[1] * .70):
                 normalize = 1 - (float(x) / float(image.shape[0]) / 0.3)  # 0 to 1
                 objectness = min(max(normalize * 2, 0.35), 0.8)
-            elif image.shape[1] * .3 < y < image.shape[1] * .70:
-                normalize = (1 - (float(x) / image.shape[0])) / 2  # 0 to 0.35
-                objectness = min(max(normalize, 0.1), 0.35)
+            elif image.shape[1] * .2 < y < image.shape[1] * .70:
+                normalize = (1 - (float(x) / image.shape[0])) / 1.6  # 0 to 0.5
+                objectness = min(max(normalize, 0.1), 0.5)
             if visible[0] in self.visited_lang:
                 objectness = max(objectness, self.visited_lang[visible[0]])
             if objectness > 0.35:
@@ -406,7 +406,7 @@ class GenerateMap:
             open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
 
         # to filter some of previos data:
-        # self.points_description = [a for a in self.points_description if a[2] == 'open_room' or a[2] == 'close_room']
+        self.points_description = [a for a in self.points_description if a[2] == 'open_room' or a[2] == 'close_room']
 
         self.write_to_pickle()
 
@@ -572,6 +572,13 @@ def close_room(degree):
         class_prediction = "close_room"
     return class_prediction
 
+def corridor(degree):
+    if -30<degree<30:
+        class_prediction = None
+    else:
+        class_prediction = "corridor"
+    return class_prediction
+
 def open_room(degree):
     if -30 < degree < 30 or degree > 150 or degree < -150:
         class_prediction = None
@@ -603,7 +610,7 @@ def corner(degree):
 def junction(degree):
     return "4_junction"
 
-lang_dic = {"close_room":close_room, "open_room":open_room, "t_junction":t_junction, "corner":corner, "4_junction":junction}
+lang_dic = {"close_room":close_room, "open_room":open_room, "corridor":corridor}
 
 def make_pose_stamped(pose, degree):
     out = PoseStamped()
