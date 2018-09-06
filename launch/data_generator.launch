@@ -12,6 +12,7 @@
 	<arg name="map_name" default="real_1" />
 	<!--<arg name="transform_pose" default="-40.0 -10.10" />-->
 	<!--<arg name="map_name" default="seattle" />-->
+
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />

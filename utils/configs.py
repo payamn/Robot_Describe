@@ -10,7 +10,7 @@ To Run the code for new map:
 
 1) run generate map with generate_point argument to first annotate intersections
 2) run generate path with is_generate_path = True and move robot in stage to generate path
-3) run generate map withour generate_point to generate data
+3) run generate map withour generate_point to generate  qdata
 
 MAP_NAME = "aces_map"
 X_OFFSET = -44.2
