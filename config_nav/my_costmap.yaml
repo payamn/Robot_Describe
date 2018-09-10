@@ -6,4 +6,4 @@ my_costmap:
   map_topic: "gmap"
   publish_frequency: 20
   obstacles:
-    observation_sources: base_scan
+    observation_sources: scan

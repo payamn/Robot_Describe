@@ -25,6 +25,7 @@ import torchvision.models as models
 
 from utils import model_utils
 from script.utility import CheckPointSaver
+from script.resnet import my_resnet
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -136,8 +137,9 @@ class Network_Map(nn.Module):
         # conv = self.conv8 (self.relu(conv))
         # conv = self.conv9 (self.relu(conv))
         # conv = self.conv10 (self.relu(conv))
-        # # conv1 = self.conv1(resnet)
+        # conv1 = self.conv1(resnet)
         # predict = self.conv11(conv).permute(0,2,3,1)
+
         # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
         predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 1, (3+self.numb_of_prediction))
         # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
@@ -231,7 +233,8 @@ class Map_Model:
         else:
             print ("log is off")
             self.logger = None
-        self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
+        self.model = my_resnet()
+        # self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
         if self.use_cuda:
             self.model = self.model.cuda()
 
@@ -268,7 +271,7 @@ class Map_Model:
                 # del state_load["conv2.weight"]
                 # del state_load["conv2.bias"]
                 remove_comp = [
-                    "linear.bias", "linear.weight",
+                    # "linear.bias", "linear.weight",
                     # "conv0.weight", "conv0.bias", "conv1.weight",
                     # "conv1.bias", "conv2.weight", "conv2.bias", "conv3.weight", "conv3.bias", "conv4.weight",
                     # "conv4.bias", "conv5.weight", "conv5.bias", "conv6.weight", "conv6.bias", "conv7.weight",
@@ -339,7 +342,7 @@ class Map_Model:
             target_poses = Variable(target_poses).cuda() if self.use_cuda else Variable(target_poses)
             target_objectness = Variable(target_objectness).cuda() if self.use_cuda else Variable(target_objectness)
 
-            classes_out, poses, objectness = self.model(local_map)
+            classes_out, poses, objectness = self.model(laser_map, local_map)
 
             topv, topi = classes_out.data.topk(1)
 
@@ -453,7 +456,7 @@ class Map_Model:
 
             pbar.set_description(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
             iter + 1, timeSince(self.start, (batch + 1) / (len(dataloader)))
-            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes))
+            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, np.mean(epoch_accuracy_objectness), np.mean(epoch_accuracy_classes)))
 
 
             pbar.update(1)
