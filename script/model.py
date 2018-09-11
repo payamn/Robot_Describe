@@ -539,6 +539,7 @@ class Map_Model:
 
     def validation(self, batch_size, iter, save, plot=False, dataset=None):
         self.start = time.time()
+        self.model = self.model.eval()
 
         if dataset is None:
             dataset = self.dataset_validation
@@ -579,7 +580,7 @@ class Map_Model:
                 self.dataset.set_augmentation_level(2)
             elif iter >= 100:
                 self.dataset.set_augmentation_level(1)
-
+            self.mode = self.model.train()
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             if save:
