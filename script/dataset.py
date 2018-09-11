@@ -182,14 +182,14 @@ class Map_Dataset(Dataset):
         target_poses = target[ :, :, :, 1:3]
         target_objectness = target[ :, :, :, 0]
 
-        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
+        laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 100, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
         # laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
         # laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
 
         local_maps = Utility.sub_image(local_maps, 0.0500000007451, center, angle, constants.LOCAL_MAP_DIM,
                                        constants.LOCAL_MAP_DIM, only_forward=True, transform=transform, resize=resize
                                        )
-        local_maps = cv2.resize(local_maps, (240, 240))
+        local_maps = cv2.resize(local_maps, (100, 100))
 
         laser_scan_map = laser_scan_map.squeeze(2)
         # laser_scan_map_low = laser_scan_map_low.squeeze(2)

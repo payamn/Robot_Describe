@@ -39,11 +39,11 @@ class DescribeOnline:
 
         center = (0, constants.LOCAL_DISTANCE/ 2)
 
-        laser_scan_map = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER)
-        laser_scan_map_low = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, circle_size=1)
+        laser_scan_map = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 100, constants.MAX_RANGE_LASER)
+        laser_scan_map_low = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 100, constants.MAX_RANGE_LASER, circle_size=1)
         laser_map= torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
 
-        local_maps = cv2.resize(self.local_map, (240, 240))
+        local_maps = cv2.resize(self.local_map, (100, 100))
 
         laser_scan_map = laser_scan_map.squeeze(2)
         laser_scan_map_low = laser_scan_map_low.squeeze(2)

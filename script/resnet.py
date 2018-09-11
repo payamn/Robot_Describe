@@ -54,7 +54,7 @@ class ResNetCombine(nn.Module):
         self.layer1_laser = self._make_layer(block, 64, layers[0], is_map=False)
         self.layer2_laser = self._make_layer(block, 128, layers[1], stride=2, is_map=False)
         # self.layer3_laser = self._make_layer(block, 256, layers[2], stride=2, is_map=False)
-
+        self.drop_out = nn.Dropout()
         self.conv1_map = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1_map = nn.BatchNorm2d(64)
         self.relu_map = nn.ReLU(inplace=True)
@@ -65,8 +65,8 @@ class ResNetCombine(nn.Module):
         self.inplanes_map += 128
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 256, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(256 * 4, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+num_classes))
+        self.avgpool = nn.AvgPool2d(4, stride=1)
+        self.fc = nn.Linear(256, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+num_classes))
 
         self.soft_max = nn.LogSoftmax(dim=4)
         self.tanh = nn.Tanh()
@@ -123,6 +123,7 @@ class ResNetCombine(nn.Module):
         # map = self.layer3_map(map)
         concat = torch.cat((map, laser), 1)
 
+        concat = self.drop_out(concat)
         x = self.layer3(concat)
         x = self.layer4(x)
 
