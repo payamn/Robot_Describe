@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 import roslib
-roslib.load_manifest('blob_follower')
+# roslib.load_manifest('blob_follower')
 import rospy
 import actionlib
 from mbf_msgs.msg import MoveBaseAction, MoveBaseGoal
