@@ -22,18 +22,23 @@ class WordEncoding:
     def __init__(self):
         self.sos = "[sos]"
         self.eos = "[eos]"
-        self.sentences = ["close_room", "open_room", "4_junction" ,"t_junction", "corner"]
-        classes = ["close_room", "open_room",
-                        "corner_left", "corner_right",
-                        "t_junction_right_forward", "t_junction_right_left", "t_junction_left_forward", "t_junction", "4_junction"]
+        # self.sentences = ["close_room", "open_room", "corridor"]
+        classes = ["close_room", "open_room", "corridor"]
 
         self.classes = {char: idx for idx, char in enumerate(classes)}
         self.classes_labels = {idx: char for idx, char in enumerate(classes)}
         # self.parent_class_dic = {idx: prt_idx for idx, lable in enumerate(classes) for prt_idx, prt_lable in enumerate(self.sentences) if prt_lable in lable}
         #TODO: Move next line
-        self.publisher = {x: rospy.Publisher(x, PoseArray, queue_size=10, latch=True) for x in self.classes}
-        self.publish_list = {x: [] for x in self.classes}
-
+        self.publisher = {
+            "close_room" : rospy.Publisher('close_rooms', PoseArray, queue_size=10, latch=True),
+            "open_room": rospy.Publisher('open_rooms', PoseArray, queue_size=10, latch=True),
+            "corridor": rospy.Publisher('corridor', PoseArray, queue_size=10, latch=True)
+        }
+        self.publish_list = {
+            "close_room": [],
+            "open_room": [],
+            "corridor": []
+        }
         self.tf_ros = TransformerROS()
 
     def len_classes(self):
@@ -58,7 +63,12 @@ class WordEncoding:
         for mode in self.classes:
             if mode not in self.publish_list:
                 continue
-            closest_points = self.closest_node(point, self.publish_list[mode], 0.85)
+
+            distance = 0.7
+            if class_lable == 2:
+                distance = 1.2
+
+            closest_points = self.closest_node(point, self.publish_list[mode], distance)
             if len(closest_points) == 0:
                 continue
             del_nodes = []
@@ -69,26 +79,31 @@ class WordEncoding:
                     objectness = (self.publish_list[mode][close_point[0]][2] + objectness)/2
                     del_nodes.append(close_point[0])
                     not_publish_point += 1
-                elif class_lable != self.classes[mode] and close_point[1] < 0.6 :
+                elif class_lable != self.classes[mode] and close_point[1] < 0.3:
                     if objectness < self.publish_list[mode][close_point[0]][2]:
-                        self.publish_list[mode][close_point[0]] = (self.publish_list[mode][close_point[0]][0],
-                                                                   self.publish_list[mode][close_point[0]][1],
-                                                                   self.publish_list[mode][close_point[0]][2] / 2.0,
-                                                                   self.publish_list[mode][close_point[0]][3]
-                                                                   )
-                        objectness = objectness / 2.0
+
+                        self.publish_list[mode][close_point[0]] = (
+                            self.publish_list[mode][close_point[0]][0],
+                            self.publish_list[mode][close_point[0]][1],
+                            self.publish_list[mode][close_point[0]][2] * 0.95,
+                            self.publish_list[mode][close_point[0]][3]
+                        )
+
                         not_publish_point -= 1
 
                     else:
-                        objectness = objectness / 1.5
                         if self.publish_list[mode][close_point[0]][2] < 0.2:
                             del_nodes.append(close_point[0])
                         else:
-                            self.publish_list[mode][close_point[0]] = (self.publish_list[mode][close_point[0]][0],
-                                                                       self.publish_list[mode][close_point[0]][1],
-                                                                       self.publish_list[mode][close_point[0]][2] / 2.0,
-                                                                       self.publish_list[mode][close_point[0]][3]
-                                                                       )
+                            pass
+                        self.publish_list[mode][close_point[0]] = (self.publish_list[mode][close_point[0]][0],
+                                                                   self.publish_list[mode][close_point[0]][1],
+                                                                   self.publish_list[mode][close_point[0]][2] * 0.85,
+                                                                   self.publish_list[mode][close_point[0]][3]
+                                                                   )
+
+                        objectness = objectness * 0.85
+
             for node in del_nodes:
                 self.publish_list[mode].__delitem__(node)
 
@@ -119,7 +134,7 @@ class WordEncoding:
             pose_msgs[mode].header.frame_id = 'map'
             pose_msgs[mode].header.stamp = rospy.Time.now()
             for point in self.publish_list[mode]:
-                if point[2] < 0.2:
+                if point[2] < 0.3:
                     continue
                 pose_msg = Pose()
                 pose_msg.position.x = point[0]
@@ -144,7 +159,7 @@ class WordEncoding:
             backtorgb = cv.cvtColor(map_data[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             backtorgb_laser = cv.cvtColor(laser_map[batch].cpu().data.numpy(), cv.COLOR_GRAY2RGB)
             copy_backtorgb = backtorgb.copy()
-            publish_poses = {x: [] for x in self.classes}
+            publish_poses = {"close_room":[], "open_room":[], "corridor":[]}
             for x in range (predict_classes[0].shape[1]):
                 for y in range (predict_classes[0].shape[2]):
                     for anchor in range(predict_classes[0].shape[3]):
@@ -159,8 +174,6 @@ class WordEncoding:
                             cv.circle(backtorgb_laser, pose, 5, (0, 0, 255))
 
                         if (predict_objectness[batch][x][y][anchor].item()>= constants.ACCURACY_THRESHOLD):
-                            if anchor ==1 :
-                                print anchor
                             pose = ((predict_poses[batch][x][y][anchor].cpu().detach().numpy()))
                             pose_map = (pose + np.asarray([x, y])) * ( float(constants.LOCAL_MAP_DIM) / predict_classes[0].shape[1]) -np.asarray([0, constants.LOCAL_MAP_DIM/2.0])
                             pose_map = (pose_map[0], pose_map[1], predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item()))
@@ -171,12 +184,14 @@ class WordEncoding:
                             predict.append((pose, self.get_class_char(predict_classes[0][batch][x][y][anchor].item()),
                                             predict_objectness[batch][x][y][anchor].item() * math.exp(predict_classes[1][batch][x][y][anchor].item())))
                             color = (255, 0, 100)
-                            class_name = self.classes_labels[predict_classes[0][batch][x][y][anchor].item()]
-                            publish_poses[class_name].append(pose_map)
-
-                            if predict_classes[0][batch][x][y][anchor].item() == 0:
+                            if predict_classes[0][batch][x][y][anchor].item() == 1:
+                                publish_poses["open_room"].append(pose_map)
                                 color = (100,0,255)
-                            elif predict_classes[0][batch][x][y][anchor].item()  == 1:
+                            elif predict_classes[0][batch][x][y][anchor].item()  == 0:
+                                publish_poses["close_room"].append(pose_map)
+                                color = (255,0,0)
+                            elif predict_classes[0][batch][x][y][anchor].item()  == 2:
+                                publish_poses["corridor"].append(pose_map)
                                 color = (255,0,0)
                             cv.circle(backtorgb, pose, 4, color)
                             cv.circle(backtorgb_laser, pose, 4, color)
@@ -194,11 +209,9 @@ class WordEncoding:
             plt.show()
 
     def get_object_class(self, object):
+        # no anchor anymore
         if object[1] in self.classes:
-            prefer_anchor = 1
-            if "room" in object[1]:
-                prefer_anchor = 0
-            return self.classes[object[1]], object[2], prefer_anchor, object[3]
+            return self.classes[object[1]], object[2], 0, object[3]
         else:
             print (object, 0)
             print ("set_objcet_class class not found skiping")

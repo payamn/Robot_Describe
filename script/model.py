@@ -25,6 +25,7 @@ import torchvision.models as models
 
 from utils import model_utils
 from script.utility import CheckPointSaver
+from script.resnet import my_resnet
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -97,7 +98,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 class Network_Map(nn.Module):
-    def __init__(self, input_size, output_size, max_length=MAX_LENGTH, num_of_prediction=5, len_parent=4, training=True):
+    def __init__(self, input_size, output_size, max_length=MAX_LENGTH, num_of_prediction=3, len_parent=4, training=True):
         super(Network_Map, self).__init__()
         self.input_size = input_size[0]
         output_feature = input_size[1]
@@ -107,26 +108,13 @@ class Network_Map(nn.Module):
         self.resnet34 = nn.Sequential(*modules)
 
         # print (self.resnet34)
-        self.conv0 = nn.Conv2d(1, 16, 4)
-        self.relu = nn.LeakyReLU()
-        self.conv1 = nn.Conv2d(16, 16, 5)
-        self.conv2 = nn.Conv2d(16, 32, 5)
-        self.conv3 = nn.Conv2d(32, 32, 5)
-        self.conv4 = nn.Conv2d(32, 64, 7)
-        self.conv5 = nn.Conv2d(64, 64, 9 )
-        self.conv6 = nn.Conv2d(64, 32, 9 )
-        self.conv7 = nn.Conv2d(32, 32, 9 )
-        self.conv8 = nn.Conv2d(32, 16, 9 )
-        self.conv9 = nn.Conv2d(16, 24, 9 )
-        self.conv10 = nn.Conv2d(24, 24, 9 )
-        self.conv11 = nn.Conv2d(24, 24, 9 )
 
         self.max_pool = nn.MaxPool2d(4, stride=2)
 
         self.numb_of_prediction = num_of_prediction
 
         self.output_size = output_size
-        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*2*12)
+        self.linear = nn.Linear(256*15*15, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+self.numb_of_prediction))
         # self.linear_pose = nn.Linear(25088,  2 * num_of_prediction)
         # self.linear_classes = nn.Linear(25088, self.output_size * num_of_prediction)
         # self.linear_classes_parents = nn.Linear(512*4*4 , self.len_parent * num_of_prediction)
@@ -149,10 +137,11 @@ class Network_Map(nn.Module):
         # conv = self.conv8 (self.relu(conv))
         # conv = self.conv9 (self.relu(conv))
         # conv = self.conv10 (self.relu(conv))
-        # # conv1 = self.conv1(resnet)
+        # conv1 = self.conv1(resnet)
         # predict = self.conv11(conv).permute(0,2,3,1)
+
         # predict axis are B,W,H,Anchors,Objectness+(x,y)+classes
-        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 12)
+        predict = predict.view(batch_size, constants.GRID_LENGTH, constants.GRID_LENGTH, 1, (3+self.numb_of_prediction))
         # poses_out = (self.tanh(self.linear_pose(resnet)) + 1.0) / 2
         # poses_out = poses_out.view(batch_size, self.numb_of_prediction, 2)
         # classes_out = self.linear_classes(resnet.view(batch_size, 1, -1))
@@ -225,6 +214,7 @@ class Map_Model:
 
         self.dataset = dataset_train
         self.dataset_validation = dataset_validation
+        self.dataloader_validation = None
         self.word_encoding = model_utils.WordEncoding()
         self.learning_rate = learning_rate
         self.best_lost = sys.float_info.max
@@ -243,7 +233,8 @@ class Map_Model:
         else:
             print ("log is off")
             self.logger = None
-        self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
+        self.model = my_resnet()
+        # self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
         if self.use_cuda:
             self.model = self.model.cuda()
 
@@ -256,7 +247,7 @@ class Map_Model:
         self.weight_loss = torch.ones([len(self.word_encoding.classes)])
         self.weight_loss[self.word_encoding.classes["close_room"]] = 0.0005
         self.weight_loss[self.word_encoding.classes["open_room"]] = 0.0005
-        self.criterion_classes = nn.NLLLoss(weight=self.weight_loss.cuda())
+        self.criterion_classes = nn.NLLLoss()#weight=self.weight_loss.cuda())
         self.criterion_poses = nn.MSELoss(size_average=False)
         self.criterion_objectness = nn.MSELoss()
 
@@ -268,22 +259,54 @@ class Map_Model:
             self.project_path = os.path.dirname(resume_path)
             if os.path.isfile(resume_path):
                 print("=> loading checkpoint '{}'".format(resume_path))
-                checkpoint = torch.load(resume_path)
+                if self.use_cuda:
+                    checkpoint = torch.load(resume_path)
+                else:
+                    checkpoint = torch.load(resume_path, map_location = 'cpu')
+
                 self.start_epoch = checkpoint['epoch']
                 # self.best_lost = checkpoint['epoch_lost']
                 state = self.model.state_dict()
                 state_load = checkpoint['state_dict']
                 # del state_load["conv2.weight"]
                 # del state_load["conv2.bias"]
+                remove_comp = [
+                    # "linear.bias", "linear.weight",
+                    # "conv0.weight", "conv0.bias", "conv1.weight",
+                    # "conv1.bias", "conv2.weight", "conv2.bias", "conv3.weight", "conv3.bias", "conv4.weight",
+                    # "conv4.bias", "conv5.weight", "conv5.bias", "conv6.weight", "conv6.bias", "conv7.weight",
+                    # "conv7.bias", "conv8.weight", "conv8.bias", "conv9.weight", "conv9.bias",
+                    # "conv10.weight", "conv10.bias", "conv11.weight", "conv11.bias"
+                ]
+                for comp in remove_comp:
+                    del state_load[comp]
                 state.update(state_load)
                 self.model.load_state_dict(state)
+
+
+                # try:
+                #     state.update(state_load)
+                #     self.model.load_state_dict(state)
+                #
+                # except Exception as e:
+                #     print("problem in loading: ", e)
+                #     to_continue = raw_input("do you want to fix by removing those wait?(y/n)")
+                #     if to_continue == "y":
+                #         remove_comp = ["linear.bias", "linear.weight", "conv0.weight", "conv0.bias", "conv1.weight", "conv1.bias", "conv2.weight", "conv2.bias", "conv3.weight", "conv3.bias", "conv4.weight", "conv4.bias", "conv5.weight", "conv5.bias", "conv6.weight", "conv6.bias", "conv7.weight", "conv7.bias", "conv8.weight", "conv8.bias", "conv9.weight", "conv9.bias", "conv10.weight", "conv10.bias", "conv11.weight", "conv11.bias"]
+                #         for comp in remove_comp:
+                #             del state_load[comp]
+                #             del state[comp]
+                #     state.update(state_load)
+                #     self.model.load_state_dict(state)
+
+
                 # self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("=> loaded checkpoint '{}' (epoch {})"
                       .format(resume_path, checkpoint['epoch']))
             else:
                 print("=> no checkpoint found at '{}'".format(resume_path))
 
-    def     model_forward(self, batch_size, mode, iter, plot=False):
+    def model_forward(self, batch_size, mode, iter, plot=False):
         iter_data_loader = None
         dataset = None
         dataloader = None
@@ -304,7 +327,7 @@ class Map_Model:
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
         accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
-        pbar = tqdm(total=len(dataloader))
+        pbar = tqdm(total=len(dataloader)+1)
 
         for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
             loss_classes = 0
@@ -319,12 +342,12 @@ class Map_Model:
             target_poses = Variable(target_poses).cuda() if self.use_cuda else Variable(target_poses)
             target_objectness = Variable(target_objectness).cuda() if self.use_cuda else Variable(target_objectness)
 
-            classes_out, poses, objectness = self.model(local_map)
+            classes_out, poses, objectness = self.model(laser_map, local_map)
 
             topv, topi = classes_out.data.topk(1)
 
             if plot:
-                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], topi, poses, objectness,
+                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], (topi, topv), poses, objectness,
                                                     target_classes, target_poses, target_objectness)
             # b = word_encoded_class != self.word_encoding.classes["noting"]
             # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
@@ -342,7 +365,7 @@ class Map_Model:
                 for x in range (target_classes.shape[1]):
                     for y in range (target_classes.shape[2]):
                         for anchor in range(target_classes.shape[3]):
-                            if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD):
+                            if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD_PREDICTION):
                                 object_acc.append(1)
                                 if acc[batch_idx][x][y][anchor]:
                                     accuracy.append(1)
@@ -350,7 +373,7 @@ class Map_Model:
                                 else:
                                     accuracy.append(0)
                                     accuracy_class = 0
-                            elif (target_objectness[batch_idx][x][y][anchor].item()<= constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()<=constants.ACCURACY_THRESHOLD):
+                            elif (target_objectness[batch_idx][x][y][anchor].item()<= constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()<=constants.ACCURACY_THRESHOLD_PREDICTION):
                                 continue
                             else:
                                 accuracy.append(0)
@@ -408,12 +431,11 @@ class Map_Model:
             poses = poses * mask_poses
             target_poses = target_poses * mask_poses
 
-            mask_classes = mask_objectness.repeat(1,1,1,1,9).type(torch.float)
+            mask_classes = mask_objectness.repeat(1,1,1,1,3).type(torch.float)
             if self.use_cuda:
                 mask_classes = mask_classes.cuda()
             classes_out = classes_out * mask_classes
             classes_out = classes_out.permute(0, 4, 1, 2, 3)
-            target_classes = target_classes
             # landa_class = 1
             loss_classes = self.criterion_classes(classes_out, target_classes)  # +\
             # (1-landa_class)*criterion_classes_parents(output_classes_parent, word_encoded_class_parent)
@@ -434,7 +456,7 @@ class Map_Model:
 
             pbar.set_description(mode+' Epoch %d %s (%.2f%%) %.6f acc_objectness:%.4f acc_classes:%.4f' % (
             iter + 1, timeSince(self.start, (batch + 1) / (len(dataloader)))
-            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, acc_objectness, acc_classes))
+            , float((batch + 1)) / (len(dataloader)) * 100, print_loss_avg, np.mean(epoch_accuracy_objectness), np.mean(epoch_accuracy_classes)))
 
 
             pbar.update(1)
@@ -480,10 +502,11 @@ class Map_Model:
                 self.logger.scalar_summary(tag, value, iter + 1)
         pbar.set_description (
             mode + ' Epoch %d %s (%.2f%%) %.6f acc_classes:%.4f acc_objectness:%.4f ' % (
-            iter, timeSince(self.start, (batch + 1) / (len(dataloader))),
+            iter+1, timeSince(self.start, (batch + 1) / (len(dataloader))),
             float((batch + 1)) / (len(dataloader)) * 100, epoch_loss_total / len(dataloader),
             epoch_accuracy_classes, epoch_accuracy_objectness)
             )
+        pbar.update(1)
         pbar.close()
         print("")
 
@@ -516,11 +539,12 @@ class Map_Model:
 
     def validation(self, batch_size, iter, save, plot=False, dataset=None):
         self.start = time.time()
+        self.model = self.model.eval()
 
         if dataset is None:
             dataset = self.dataset_validation
-        self.dataloader_validation = DataLoader(dataset, shuffle=True, num_workers=5 , batch_size=batch_size, drop_last=True)
-
+        if self.dataloader_validation is None:
+            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=5, batch_size=batch_size, drop_last=True)
         epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
         # print('validation loss: %.4f class_accuracy: %.4f' %
@@ -543,8 +567,9 @@ class Map_Model:
         # print('validation acc classes: %f acc objectness: %f)' % (epoch_accuracy_classes, epoch_accuracy_objectness), "\n\n")
 
 
-    def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True):
-        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=10 , batch_size=batch_size, drop_last=True)
+    def train_iters(self, n_iters, print_every=1000, plot_every=100, batch_size=100, save=True, num_workers=6):
+        self.dataloader = DataLoader(self.dataset, shuffle=True, num_workers=num_workers , batch_size=batch_size, drop_last=True)
+        self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=num_workers, batch_size=batch_size, drop_last=True)
         n_iters = self.start_epoch + n_iters
         start = max (self.start_epoch-1, 0)
         self.validation(batch_size, start, save, plot=False)
@@ -555,7 +580,7 @@ class Map_Model:
                 self.dataset.set_augmentation_level(2)
             elif iter >= 100:
                 self.dataset.set_augmentation_level(1)
-
+            self.mode = self.model.train()
             self.start = time.time()
             epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "train", iter)
             if save:
