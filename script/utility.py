@@ -113,7 +113,11 @@ class Utility:
             image = cv2.erode(d_im, kernel, iterations=1)
         else: # for real map we will reduce the thickness of obstacle
 
-            kernel = np.ones((2, 2), np.uint8)
+            # kernel = np.ones((10, 10), np.uint8)
+            # d_im = cv2.dilate(image, kernel, iterations=1)
+            # image = cv2.erode(image, kernel, iterations=1)
+            #
+            kernel = np.ones((3,3), np.uint8)
             image = cv2.erode(image, kernel, iterations=1)
 
         return image

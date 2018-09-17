@@ -97,6 +97,8 @@ class Map_Dataset(Dataset):
         laser_scans = dic_data["laser_scan"]
         local_maps = dic_data["local_maps"]
 
+        laser_scans_temp = np.asarray(laser_scans)
+        laser_scans = laser_scans_temp+ np.random.rand(laser_scans_temp.shape[0]) / (constants.MAX_RANGE_LASER * 7.0)
         angle = None
         transform = None
         resize = None
@@ -106,8 +108,8 @@ class Map_Dataset(Dataset):
                 transform = (random.randint(-2000, 0) / 10000.0, random.randint(-2000, 2000) / 10000.0)
 
             if self.augmentation_level > 1:
-                # max angle transform -+30 degree
-                angle = random.randint(-300, 300)/10.0
+                # max angle transform -+35 degree
+                angle = random.randint(-350, 350)/10.0
 
             if self.augmentation_level > 2:
                 # resize between 0.85x to 1.15x
@@ -118,6 +120,8 @@ class Map_Dataset(Dataset):
         words = list(map(self.word_encoding.get_object_class, language))
         center = (0, constants.LOCAL_DISTANCE/ 2)
         for word in words:
+            if word is None or word[1] is None:
+                print "error"
             x, y = word[1]
             y = y + constants.LOCAL_DISTANCE/ 2
             if resize:
@@ -133,14 +137,14 @@ class Map_Dataset(Dataset):
                 x += transform[0]
                 y += transform[1]
 
-            if 0.1 < x < 0.9 and 0.1 < y < 0.9:
+            if 0.05 < x < 0.95 and 0.05 < y < 0.95:
                 x = x * constants.GRID_LENGTH
                 y = y * constants.GRID_LENGTH
                 word_encoded.append((word[0], (x, y), word[2], word[3], angle, transform))
 
 
         # width , height, two anchors, objectness + (x, y) + classes
-        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 2, 4], dtype=torch.float)
+        target = torch.zeros([constants.GRID_LENGTH, constants.GRID_LENGTH, 1, 4], dtype=torch.float)
 
         for word in word_encoded:
 
@@ -164,7 +168,7 @@ class Map_Dataset(Dataset):
             except Exception as e:
                 print e
                 print ("target shape: ", target.shape)
-                print ("word: ", len(word))
+                print ("word: ", word)
                 print ("x:, y:, (1-x_center) * 3:", x, y, (1 - x_center) * 3)
                 exit(2)
             # x_center , y_center
@@ -179,8 +183,8 @@ class Map_Dataset(Dataset):
         target_objectness = target[ :, :, :, 0]
 
         laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
-        laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
-        laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
+        # laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
+        # laser_scans_map = torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
 
         local_maps = Utility.sub_image(local_maps, 0.0500000007451, center, angle, constants.LOCAL_MAP_DIM,
                                        constants.LOCAL_MAP_DIM, only_forward=True, transform=transform, resize=resize
@@ -188,12 +192,15 @@ class Map_Dataset(Dataset):
         local_maps = cv2.resize(local_maps, (240, 240))
 
         laser_scan_map = laser_scan_map.squeeze(2)
-        laser_scan_map_low = laser_scan_map_low.squeeze(2)
-        local_maps = torch.from_numpy(np.stack([local_maps, laser_scan_map_low, laser_scan_map])).type(torch.FloatTensor)
+        # laser_scan_map_low = laser_scan_map_low.squeeze(2)
+        laser_scan_map = torch.from_numpy(laser_scan_map).type(torch.FloatTensor)
+        local_maps = torch.from_numpy(local_maps).type(torch.FloatTensor)
+        local_maps = local_maps.unsqueeze(0)
+        laser_scan_map = laser_scan_map.unsqueeze(0)
 
         # local_maps = torch.from_numpy(local_maps).type(torch .FloatTensor).unsqueeze(0)
 
-        return target_classes.type(torch.LongTensor), target_poses, target_objectness, local_maps, laser_scans_map
+        return target_classes.type(torch.LongTensor), target_poses, target_objectness, local_maps, laser_scan_map
 
 
 

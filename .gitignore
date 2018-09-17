@@ -4,5 +4,6 @@ bag*
 checkpoints*
 *.pyc
 **/logs*/*
+**/log_back/*
 **/dataset/*
 data/*

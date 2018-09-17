@@ -40,26 +40,27 @@ class DescribeOnline:
         center = (0, constants.LOCAL_DISTANCE/ 2)
 
         laser_scan_map = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER)
-        laser_scan_map_low = model_utils.laser_to_map(self.laser_data, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, circle_size=1)
-        laser_map= torch.from_numpy(np.stack([laser_scan_map, laser_scan_map, laser_scan_map])).type(torch.FloatTensor)
+        laser_scan_map = torch.from_numpy(laser_scan_map).type(torch.FloatTensor)
 
         local_maps = cv2.resize(self.local_map, (240, 240))
 
+        local_maps = torch.from_numpy(local_maps).type(torch.FloatTensor)
+
+        local_maps = Variable(local_maps).cuda() if self.use_cuda else Variable(local_maps)
         laser_scan_map = laser_scan_map.squeeze(2)
-        laser_scan_map_low = laser_scan_map_low.squeeze(2)
-        local_map = torch.from_numpy(np.stack([local_maps, laser_scan_map_low, laser_scan_map])).type(torch.FloatTensor)
+        laser_scan_map = Variable(laser_scan_map).cuda() if self.use_cuda else Variable(laser_scan_map)
 
-        local_map = Variable(local_map).cuda() if self.use_cuda else Variable(local_map)
-        laser_map = Variable(laser_map).cuda() if self.use_cuda else Variable(laser_map)
-
-        local_map = local_map.unsqueeze(0)
-        laser_map = laser_map.unsqueeze(0)
-        classes_out, poses, objectness = self.map_model.model(local_map)
+        local_maps = local_maps.unsqueeze(0)
+        local_maps = local_maps.unsqueeze(1)
+        laser_scan_map = laser_scan_map.unsqueeze(0)
+        laser_scan_map = laser_scan_map.unsqueeze(1)
+        # laser_scan_map = laser_scan_map.unsqueeze(0)
+        classes_out, poses, objectness = self.map_model.model(laser_scan_map, local_maps)
 
         topv, topi = classes_out.data.topk(1)
 
         if plot:
-            self.map_model.word_encoding.visualize_map(local_map[:, 0, :, :], laser_map[:, 0, :, :], (topi, topv), poses, objectness)
+            self.map_model.word_encoding.visualize_map(local_maps[:, 0, :, :], laser_scan_map[:, 0, :, :], (topi, topv), poses, objectness)
     def callback_odom(self, odom):
         # print ("odom:", odom.twist.twist.angular.z)
         if math.fabs(odom.twist.twist.angular.z) > 0.5:
