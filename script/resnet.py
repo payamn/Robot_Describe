@@ -67,7 +67,7 @@ class ResNetCombine(nn.Module):
         self.layer4 = self._make_layer(block, 256, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(256 * 4, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+num_classes))
-
+        self.drop_out = nn.Dropout()
         self.soft_max = nn.LogSoftmax(dim=4)
         self.tanh = nn.Tanh()
 
@@ -122,7 +122,7 @@ class ResNetCombine(nn.Module):
         map = self.layer2_map(map)
         # map = self.layer3_map(map)
         concat = torch.cat((map, laser), 1)
-
+        concat = self.drop_out(concat)
         x = self.layer3(concat)
         x = self.layer4(x)
 

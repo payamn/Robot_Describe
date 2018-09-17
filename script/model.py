@@ -327,6 +327,8 @@ class Map_Model:
         epoch_accuracy_objectness = []
         epoch_accuracy_poses = []
         accuracy_each_class = {i: [] for i in range(len(self.word_encoding.classes))}
+        Wrong_each_class_map = {i: [] for i in range(len(self.word_encoding.classes))}
+        Wrong_each_class_laser = {i: [] for i in range(len(self.word_encoding.classes))}
         pbar = tqdm(total=len(dataloader)+1)
 
         for batch, (target_classes, target_poses, target_objectness, local_map, laser_map) in enumerate(iter_data_loader):
@@ -347,7 +349,7 @@ class Map_Model:
             topv, topi = classes_out.data.topk(1)
 
             if plot:
-                self.word_encoding.visualize_map(local_map[:,0,:,:], local_map[:,1,:,:], (topi, topv), poses, objectness,
+                self.word_encoding.visualize_map(local_map[:,0,:,:], laser_map[:,0,:,:], (topi, topv), poses, objectness,
                                                     target_classes, target_poses, target_objectness)
             # b = word_encoded_class != self.word_encoding.classes["noting"]
             # b = b.type(torch.FloatTensor).view(batch_size, -1, 1).repeat(1, 1, 2).cuda()
@@ -379,7 +381,12 @@ class Map_Model:
                                 accuracy.append(0)
                                 object_acc.append(0)
                                 accuracy_class = 0
+                            if accuracy_class == 0:
+                                Wrong_each_class_laser[target_classes[batch_idx][x][y][anchor].item()].append(laser_map[batch_idx,0,:,:])
+                                Wrong_each_class_map[target_classes[batch_idx][x][y][anchor].item()].append(local_map[batch_idx, 0, :, :])
+
                             accuracy_each_class[target_classes[batch_idx][x][y][anchor].item()].append(accuracy_class)
+
 
             acc_classes = np.mean(accuracy)
             acc_objectness = np.mean(object_acc)
@@ -486,6 +493,14 @@ class Map_Model:
         epoch_accuracy_objectness = np.mean(epoch_accuracy_objectness)
         # epoch_accuracy_poses = np.mean(epoch_accuracy_poses)
         if self.logger is not None:
+
+            if mode == "validation":
+                for idx in range(len(Wrong_each_class_laser)):
+                    self.logger.image_summary(str(idx) + "_laser", Wrong_each_class_laser[idx], iter)
+
+                for idx in range(len(Wrong_each_class_map)):
+                    self.logger.image_summary(str(idx) + "_map", Wrong_each_class_map[idx], iter)
+
             info = {
                 'Epoch_loss_'+mode: epoch_loss_total / len(dataloader),
                 'Epoch_accuracy_classes_'+mode: epoch_accuracy_classes,

@@ -55,8 +55,8 @@ if __name__ == '__main__':
     parser.set_defaults(debug=False)
 
     parser.add_argument(
-        '--cuda', dest='isCuda', action='store_false',
-        help='is cuda')
+        '--no-cuda', dest='isCuda', action='store_false',
+        help='no cuda')
     parser.set_defaults(isCuda=True)
 
 
