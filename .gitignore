@@ -3,6 +3,6 @@ bag/*
 bag*
 checkpoints*
 *.pyc
-**/logs/*
+**/logs*/*
 **/dataset/*
 data/*
