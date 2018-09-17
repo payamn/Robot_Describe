@@ -12,14 +12,15 @@ GlobalPlanner:
   use_quadratic: true
   use_grid_path: false
   use_dijkstra: true
+  orientation_mode: 3 # ForwardThenInterpolate
   
 
 #Independent settings for the planner's costmap
 global_costmap: 
   global_frame: /map
   robot_base_frame: base_link
-  update_frequency: 1.0
-  publish_frequency: 1.0
+  update_frequency: 0.4
+  publish_frequency: 0.5
   static_map: true
   width: 100.0
   height: 100.0

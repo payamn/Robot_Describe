@@ -40,7 +40,7 @@ controller:
   max_global_plan_lookahead_dist: 3.0
   max_number_classes: 6
   max_vel_theta: 0.3
-  max_vel_x: 0.5
+  max_vel_x: 0.3
   max_vel_x_backwards: 0.01
   max_vel_y: 0.0
   min_obstacle_dist: 0.8
