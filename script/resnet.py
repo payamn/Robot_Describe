@@ -64,7 +64,8 @@ class ResNetCombine(nn.Module):
         # self.layer3_map = self._make_layer(block, 256, layers[2], stride=2)
         self.inplanes_map += 128
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 256, layers[3], stride=2)
+        self.layer4 = self._make_layer(block, 256, layers[3], stride=1)
+        self.layer5 = self._make_layer(block, 3+num_classes, layers[3], stride=3)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(256 * 4, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+num_classes))
         self.conv_last =  nn.Conv2d(256, 3+num_classes, kernel_size=4, stride=1, bias=False)
@@ -126,7 +127,7 @@ class ResNetCombine(nn.Module):
         concat = self.drop_out(concat)
         x = self.layer3(concat)
         x = self.layer4(x)
-
+        x = self.layer5(x)
         x = self.conv_last(x)
         # x = self.avgpool(x)
         # x = x.view(x.size(0), -1)
