@@ -270,6 +270,7 @@ def get_map_info():
 def get_map():
     rospy.wait_for_service('/static_map')
     try:
+
         map_service = rospy.ServiceProxy('/static_map', GetMap)
         start_time = time.time()
         map = map_service()

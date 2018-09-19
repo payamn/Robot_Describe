@@ -16,14 +16,14 @@
       <param name="odom" value="/odom" />
 
 
-      <rosparam file="$(find robot_describe)/config_nav_simulation/costmap_common_params.yaml" command="load" ns="global_costmap" />
-      <rosparam file="$(find robot_describe)/config_nav_simulation/costmap_common_params.yaml" command="load" ns="local_costmap" />
-      <rosparam file="$(find robot_describe)/config_nav_simulation/local_costmap_params.yaml" command="load" />
-      <rosparam file="$(find robot_describe)/config_nav_simulation/global_costmap_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
+      <rosparam file="$(find robot_describe)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
+      <rosparam file="$(find robot_describe)/config_nav/local_costmap_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/global_costmap_params.yaml" command="load" />
       <rosparam file="$(find robot_describe)/config_nav/recovery_behaviors.yaml" command="load" />
       <rosparam file="$(find robot_describe)/config_nav/controllers.yaml" command="load" />
       <rosparam file="$(find robot_describe)/config_nav/planners.yaml" command="load" />
-      <rosparam file="$(find robot_describe)/config_nav_simulation/dwa_local_planner_params.yaml" command="load" />
+      <rosparam file="$(find robot_describe)/config_nav/dwa_local_planner_params.yaml" command="load" />
 
       <!--<rosparam file="$(find robot_describe)/config_nav/base_local_planner_params.yaml" command="load" />-->
       <!--<param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS" />-->

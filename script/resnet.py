@@ -67,6 +67,7 @@ class ResNetCombine(nn.Module):
         self.layer4 = self._make_layer(block, 256, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(256 * 4, constants.GRID_LENGTH*constants.GRID_LENGTH*1*(3+num_classes))
+        self.conv_last =  nn.Conv2d(256, 3+num_classes, kernel_size=4, stride=1, bias=False)
         self.drop_out = nn.Dropout()
         self.soft_max = nn.LogSoftmax(dim=4)
         self.tanh = nn.Tanh()
@@ -126,9 +127,10 @@ class ResNetCombine(nn.Module):
         x = self.layer3(concat)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x = self.conv_last(x)
+        # x = self.avgpool(x)
+        # x = x.view(x.size(0), -1)
+        # x = self.fc(x)
         predict = x.view(x.size(0), constants.GRID_LENGTH, constants.GRID_LENGTH, 1, (3+self.num_classes))
 
         classes_out = self.soft_max(predict[:, :, :, :, 3:])

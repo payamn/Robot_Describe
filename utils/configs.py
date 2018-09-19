@@ -1,6 +1,6 @@
-MAP_NAME = "combinenormal"
-X_OFFSET = -67.5
-Y_OFFSET =  -19.875
+MAP_NAME = "fr79"
+X_OFFSET = -34.550
+Y_OFFSET =  -14.20
 
 MODE = "train" # train or test
 
@@ -31,4 +31,16 @@ Y_OFFSET = -26.500
 MAP_NAME = "seattle"
 X_OFFSET = -40.0
 Y_OFFSET = -10.10
+
+MAP_NAME = "room_door"
+X_OFFSET = -74.45
+Y_OFFSET =  -14.3
+
+MAP_NAME = "as1"
+X_OFFSET = -128.150
+Y_OFFSET =  -24.050
+
+MAP_NAME = "fr79"
+X_OFFSET = -34.550
+Y_OFFSET =  -14.20
 """

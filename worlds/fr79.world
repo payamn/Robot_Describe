@@ -1,0 +1,74 @@
+# simple.world - basic world file example
+# Authors: Richard Vaughan
+# $Id$
+
+include "pioneer.inc"
+include "map.inc"
+include "sick.inc"
+include "blob_follower_model.inc"
+# interval_sim 100
+# time to pause (in GUI mode) or quit (in headless mode (-g)) the simulation
+quit_time 36000 # 10 hour of simulated time
+
+paused 0
+
+resolution 0.01
+
+# configure the GUI window
+window
+(
+  size [ 3742 2124] # in pixels
+  scale 17.716  # pixels per meter
+  center [ 72.196  10.264]
+  rotate [ 0.000  0.000 ]
+
+  show_data 1              # 1=on 0=off
+)
+
+# load an environment bitmap
+floorplan
+(
+  name "fr79"
+  size [69.100 28.400 0.800]
+  pose [0.000 0.000 0.000 0.000]
+  bitmap "fr79.png"
+)
+define c intersection
+(
+  color "cyan"
+  )
+define b intersection
+(
+  color "blue"
+)
+define r intersection
+(
+  color "red"
+)
+
+define g intersection
+(
+  color "green"
+)
+
+define y intersection
+(
+  color "yellow"
+)
+
+define m intersection
+(
+  color "magenta"
+)
+
+
+pioneer2dx_base_no_sonar
+(
+  color "red"
+  # can refer to the robot by this name
+  name "r0"
+  pose [ 24.888 0.098 0.000 29.214 ]
+  sicklaser( pose [ 0.000 0.000 0.000 0.000 ] )
+  localization "gps"
+  localization_origin [ 0 0 0 0 ]
+)

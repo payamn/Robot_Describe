@@ -117,7 +117,7 @@ class Utility:
             # d_im = cv2.dilate(image, kernel, iterations=1)
             # image = cv2.erode(image, kernel, iterations=1)
             #
-            kernel = np.ones((3,3), np.uint8)
+            kernel = np.ones((2,2), np.uint8)
             image = cv2.erode(image, kernel, iterations=1)
 
         return image
@@ -145,8 +145,7 @@ class Utility:
             try:
                 # t = tf_listner.getLatestCommonTime("/base_laser", map_topic)
                 t = rospy.Time(0)
-
-                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_laser", t)
+                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_laser_link", t)
             except Exception as e:
                 print (e)
                 number_of_try -= 1
@@ -154,7 +153,7 @@ class Utility:
                 continue
             break
         else:
-            raise Exception('tf problem in get_robot_pose.')
+            raise Exception('tf problem in get_robot_pose.', map_topic)
 
         return position, quaternion
     @staticmethod

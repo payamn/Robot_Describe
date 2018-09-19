@@ -3,7 +3,6 @@
 	<arg name="odom_frame" default="odom" />
     <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 
-		<remap from="scan" to="base_scan"/>
 		<remap from="map" to="gmap"/>
 
 		<param name="odom_frame" value="$(arg odom_frame)"/>
@@ -24,7 +23,8 @@
         <!--<rosparam command="load" file="$(find robot_describe)/config_nav/mapper_params.yaml" />-->
     </node>
 	<node pkg="robot_describe" type="cost_map_node" name="cost_map_node" output="screen">
-			<rosparam command="load" file="$(find robot_describe)/config_nav/my_costmap.yaml"/>
+			<rosparam command="load" file="$(find robot_describe)/config_nav_simulation/my_costmap.yaml"/>
+		<remap from="map" to="gmap"/>
 	</node>
 	<include file="$(find robot_describe)/launch/move_base_flex.launch" />
 	<node pkg="robot_describe" type="state_visualize.py" name="mbf_state_machine" output="screen"/>

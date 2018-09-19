@@ -3,7 +3,7 @@ my_costmap:
   static_map: true
   rolling_window: false
   robot_base_frame: "/base_link"
-  map_topic: "map"
+  map_topic: "/gmap"
   publish_frequency: 20
   obstacles:
     observation_sources: scan

@@ -161,10 +161,10 @@ class GenerateMap:
         self.language_with_objectness = None
         self.prev_points = [([0, 0], 0) for x in range(10)]
 
-        time.sleep(0.5)
+        time.sleep(0.1)
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         self.is_init = True
 
@@ -268,11 +268,16 @@ class GenerateMap:
             return
         map_array = Utility.normalize(cv_image)
         self.map["data"] = map_array
+        print ("got map")
 
         self.get_local_map()
+        print ("got map0")
+
         self.get_ground_truth_map()
+        print ("got map1")
 
         self.calculate_objectness_language()
+        print ("got map2")
 
         self.save_pickle()
 
@@ -295,8 +300,10 @@ class GenerateMap:
             # first calculate a box that fits the detected object
             area_check = model_utils.get_area(x_gt, y_gt, space, image_gt)
             while np.sum(area_check) < 8 * 255:  # at least 7pixel
+
                 space += 6
                 area_check = model_utils.get_area(x_gt, y_gt, space, image_gt)
+                # print ("area", area)
             # to make sure it should contain
             if 'junction' in visible[1]:
                 space += 7
@@ -305,7 +312,7 @@ class GenerateMap:
             objectness = 0.1
             area_gmap = model_utils.get_area(x, y, space, image)
 
-            if np.sum(area_gmap) > 2 * 255 and image.shape[1] * .1 < y < image.shape[1] * .90:
+            if np.sum(area_gmap) > 8 * 255 and image.shape[1] * .1 < y < image.shape[1] * .90:
                 objectness = 1
             elif (x < image.shape[0] * .30 and image.shape[1] * .3 < y < image.shape[1] * .70):
                 normalize = 1 - (float(x) / float(image.shape[0]) / 0.3)  # 0 to 1
@@ -315,7 +322,7 @@ class GenerateMap:
                 objectness = min(max(normalize, 0.1), 0.5)
             if visible[0] in self.visited_lang:
                 objectness = max(objectness, self.visited_lang[visible[0]])
-            if objectness > 0.35:
+            if objectness > 0.55:
                 self.visited_lang[visible[0]] = objectness
                 cv2.circle(image, (x, y), 4, 100)
 
@@ -386,7 +393,7 @@ class GenerateMap:
         print ("!!!!!read from pickle")
 
         while not self.is_init:
-            time.sleep(0.5)
+            time.sleep(0.1)
             print ("wait for init")
         print ("read from pickle")
         self.points_description = pickle.load(
@@ -398,7 +405,7 @@ class GenerateMap:
         # print description_degree
         if not self.is_online:
             rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
-        rospy.Subscriber("/base_scan", LaserScan, self.callback_laser_scan, queue_size=1)
+        rospy.Subscriber("/scan", LaserScan, self.callback_laser_scan, queue_size=1)
         rospy.spin()
 
     def append_to_pickle(self):
@@ -445,9 +452,9 @@ class GenerateMap:
         self.publisher.publish(target_goal_simple)
 
     def point_generator(self):
-        time.sleep(0.5)
+        time.sleep(0.1)
         # we will first generate some short_range path and then long ones
-        short_range = 12
+        short_range = 8
         long_range = 8#10
         number_of_short_run = short_range
         number_of_long_run = long_range
@@ -515,12 +522,13 @@ class GenerateMap:
                 counter_to_reset = 30
                 while Utility.distance_vector(position[:2], self.coordinates[start_index][:2]) > self.MAX_DISTANCE_TO_PUBLISH\
                         and counter_to_reset > 0:
-                    time.sleep(0.5)
-                    if counter_to_reset % 6 == 0:
+                    time.sleep(0.1)
+                    if counter_to_reset % 30 == 0:
                         self.publish_point(self.coordinates[start_index + (30 - counter_to_reset)//3], self.coordinates[start_index + (30 - counter_to_reset)//3+1])
                     position, quaternion = Utility.get_robot_pose("/map_server")
-                    print ("distance greater waiting for {} seconds".format(counter_to_reset*0.5))
-                    counter_to_reset -= 1
+                    if self.stop:
+                        print ("distance greater waiting for {} seconds".format(counter_to_reset*0.5))
+                        counter_to_reset -= 1
                 self.publish_point(self.coordinates[start_index],self.coordinates[start_index+1])
                 start_index += 1
 
@@ -540,7 +548,7 @@ class GenerateMap:
                     break
             self.is_init = False
             print ("problem initing again")
-            time.sleep(0.1)
+            time.sleep(0.01)
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
             #     position, quaternion = Utility.get_robot_pose("/map_server")
@@ -566,10 +574,10 @@ def close_room(degree):
     #     class_prediction = "room_left"
     # else:
     #     class_prediction = None
-    if -30<degree<30 or degree > 150 or degree < -150:
-        class_prediction = None
-    else:
-        class_prediction = "close_room"
+    # if -30<degree<30 or degree > 150 or degree < -150:
+    #     class_prediction = None
+    # else:
+    class_prediction = "close_room"
     return class_prediction
 
 def corridor(degree):
@@ -580,10 +588,10 @@ def corridor(degree):
     return class_prediction
 
 def open_room(degree):
-    if -30 < degree < 30 or degree > 150 or degree < -150:
-        class_prediction = None
-    else:
-        class_prediction = "open_room"
+    # if -30 < degree < 30 or degree > 150 or degree < -150:
+    #     class_prediction = None
+    # else:
+    class_prediction = "open_room"
     return class_prediction
 
 def t_junction(degree):
@@ -646,7 +654,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
-    parser.add_argument('--start_pickle', type=int, default=1200)
+    parser.add_argument('--start_pickle', type=int, default=0)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
     parser.set_defaults(generate_point=False)
     args = parser.parse_args()
@@ -655,7 +663,7 @@ if __name__ == '__main__':
 
     if args.generate_point:
         # generate_map.write_to_pickle()
-        generate_map.append_to_pickle()
+        generate_map.write_to_pickle()
     else:
         # threading.Thread(target=generate_map.get_local_map).start()
         threading.Thread(target=generate_map.point_generator).start()

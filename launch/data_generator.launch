@@ -6,8 +6,15 @@
 	<!--<arg name="map_name" default="real_2" />-->
 	<!--<arg name="transform_pose" default="-44.2 -44.25" />-->
 	<!--<arg name="map_name" default="aces_map" />-->
-	<arg name="transform_pose" default="-67.5 -19.875" />
-	<arg name="map_name" default="combinenormal" />
+	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
+	<!--<arg name="map_name" default="combinenormal" />-->
+	<!--<arg name="transform_pose" default="-74.45 -14.3" />-->
+	<!--<arg name="map_name" default="room_door" />-->
+
+	<arg name="transform_pose" default="-34.550 -14.20" />
+	<arg name="map_name" default="fr79" />
+	<!--<arg name="transform_pose" default="-128.150 -24.050" />-->
+	<!--<arg name="map_name" default="as1" />-->
 	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->
 	<!--<arg name="map_name" default="real_1" />-->
 	<!--<arg name="transform_pose" default="-40.0 -10.10" />-->
@@ -24,6 +31,7 @@
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/$(arg map_name).world">
 		<!--<remap from="/robot_0/blob" to="/robot_0/blob_0" />-->
 		<!--<remap from="/robot_0/cmd_vel" to="/cmd_vel" />-->
+		<remap from="base_scan" to="scan"/>
 		<param name="map_name" value="$(arg map_name)"/>
 	</node>
 

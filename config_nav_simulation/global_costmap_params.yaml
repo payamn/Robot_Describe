@@ -1,0 +1,29 @@
+#NavfnROS:
+ # allow_unknown: true
+ # planner_window_x: 10
+ # planner_window_y: 10
+ # visualize_potential: true 
+
+GlobalPlanner:
+  allow_unknown: true
+  default_tolerance: 0.5
+  # visualize_potential: true
+  old_navfn_behavior: false
+  use_quadratic: true
+  use_grid_path: false
+  use_dijkstra: true
+  orientation_mode: 3 # ForwardThenInterpolate
+  
+
+#Independent settings for the planner's costmap
+global_costmap: 
+  global_frame: /map_server
+  robot_base_frame: base_link
+  update_frequency: 0.4
+  publish_frequency: 0.5
+  static_map: true
+  width: 100.0
+  height: 100.0
+  rolling_window: false
+#  inflation_layer:
+#    inflation_radius: 2.5
