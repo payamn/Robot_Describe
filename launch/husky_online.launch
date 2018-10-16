@@ -2,7 +2,8 @@
 	<arg name="base_frame" default="base_link" />
 	<arg name="odom_frame" default="odom" />
 	<arg name="map_frame" default="map" />
-
+  <param name="odom_frame" value="$(arg odom_frame)" />
+	<param name="base_frame" value="$(arg base_frame)" />
 	<arg name="laser_frame" default="laser" />
 
 	<arg name="scan_topic" default="scan" />

@@ -59,6 +59,9 @@ def closest_node(robot_pos, nodes, degree_robot, max_r):
 #     pose = odom_data.pose.pose.position
 #     my_robot.pose = array([pose.x+mapper_constant_val_x, pose.y + mapper_constant_val_y])
 #     my_robot.check_next_intersection()
+base_frame = rospy.get_param("/base_frame")
+
+
 def callback_robot_0(odom_data, my_robot):
     global tf_listner, index_prev_points, prev_points
     # if not tf_listner.frameExists("/robot_0/base_link"):
@@ -66,8 +69,8 @@ def callback_robot_0(odom_data, my_robot):
     # if not tf_listner.frameExists("map"):
     #     print "map dont exits"
     # if tf_listner.frameExists("/robot_0/base_link") and tf_listner.frameExists("/map"):
-    t = tf_listner.getLatestCommonTime("/base_link", "/map")
-    position, quaternion = tf_listner.lookupTransform("/map", "/robot_0/base_link", t)
+    t = tf_listner.getLatestCommonTime(base_frame, "/map")
+    position, quaternion = tf_listner.lookupTransform("/map",base_frame, t)
     # print position
 
     if (odom_data.twist.twist.linear.x == 0 and odom_data.twist.twist.linear.y == 0 and odom_data.twist.twist.angular.z ==0):

@@ -38,11 +38,18 @@ from utils import model_utils
 from utils.configs import *
 
 class GenerateMap:
-    def __init__(self, start_pickle = 0, is_online=False):
+    def __init__(self, start_pickle = 0, is_online=False, map_name=None, map_offset=None, mode=None):
         print ("in generate map")
+        self.map_name = map_name
+        self.map_offset = map_offset
+        self.mode = mode
+        if map_name is None or map_offset is None or mode is None:
+            self.map_name = MAP_NAME
+            self.map_offset = (X_OFFSET, Y_OFFSET)
+            self.mode = MODE
+
         self.is_init = False
         points = []
-        rospy.init_node('GenerateMap')
         self.prev_points = [([0, 0],0 )for x in range(10)]
         self.index_prev_points = 0
         self.new_data_ready = False
@@ -57,15 +64,18 @@ class GenerateMap:
         self.robot_orientation_degree = (0,0,0)
         self.map = {}
         self.ground_truth_map = {}
-
+        self.finish_all = False
         self.language = None
         self.language_with_objectness = None
         self.visited_lang = {}
         self.data_pointer = 0
         self.image_pub_ground_truth = rospy.Publisher("local_map_ground_truth", Image, queue_size=1)
         self.image_pub_ground_truth_annotated = rospy.Publisher("local_map_annotated_ground_truth", Image, queue_size=1)
+
         self.image_pub = rospy.Publisher("local_map", Image, queue_size=1)
         self.image_pub_annotated = rospy.Publisher("local_map_annotated", Image, queue_size=1)
+        if is_online:
+            self.image_pub =  rospy.Publisher("local_map_generate_map", Image, queue_size=1)
         self.laser_data = None
         self.laser_list = []
         self.speed_list = []
@@ -80,25 +90,27 @@ class GenerateMap:
         self.counter = 0
         self.local_map = None
         self.ground_truth_local_map = None
-        self.generate_path = ()
         self.reset_pos_robot = rospy.ServiceProxy('/reset_position_robot_0', reset_position)
         self.publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
         self.img_sub = None
         self.MIN_DISTANCE_TO_PUBLISH = 5
         self.MAX_DISTANCE_TO_PUBLISH = 7
-
         self.is_online = is_online
 
         self.bridge = CvBridge()
 
-        pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/".format(MAP_NAME, MODE)
-        generate_path = GeneratePath(pickle_dir)
+        pickle_dir = rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/".format(self.map_name, self.mode)
+        generate_path = GeneratePath(pickle_dir, map_name=self.map_name, mode=self.mode)
         self.coordinates = generate_path.get_coordinates()
         # self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image,queue_size=1)
 
         # self.reset_gmapping()
         # self.get_map_info()
         self.get_map()
+        self.base_frame = rospy.get_param("/base_frame")
+
+        # if self.is_online:
+        #     self.read_point_description()
 
     def get_map_info(self):
         if not self.is_init:
@@ -116,8 +128,8 @@ class GenerateMap:
 
         angle = math.atan2(coordinate_next[1] - coordinate[1], coordinate_next[0] - coordinate[0])
 
-        pose.position.x = coordinate[0] + X_OFFSET
-        pose.position.y = coordinate[1] + Y_OFFSET
+        pose.position.x = coordinate[0] + self.map_offset[0]
+        pose.position.y = coordinate[1] + self.map_offset[1]
         pose.position.z = 0
         pose.orientation.w = angle
 
@@ -167,6 +179,7 @@ class GenerateMap:
         time.sleep(0.1)
 
         self.is_init = True
+        print ("init done map")
 
     def get_ground_truth_map(self):
         if not self.is_init:
@@ -181,11 +194,12 @@ class GenerateMap:
         # time.sleep(5)
         if not self.map.has_key("info") or not self.is_init:
             return
-
         self.local_map = model_utils.get_local_map(
                 self.map["info"], self.map["data"], self.language, self.image_pub, self.image_pub_annotated, dilate=True)
 
     def get_data(self):
+        # while (not self.new_data_ready or not self.is_init):
+        #     time.sleep(10)
         self.new_data_ready = False
         return self.language, self.laser_data, self.local_map
 
@@ -210,7 +224,7 @@ class GenerateMap:
 
         data = {"laser_scan":self.laser_data, "speeds":self.current_speed, "local_maps":self.local_map, "language":self.language_with_objectness}
         pickle.dump(data,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/{}/{}_{}.pkl".format(MODE, MAP_NAME, self.pickle_counter), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/data/dataset/{}/{}_{}.pkl".format(self.mode, self.map_name, self.pickle_counter), "wb"))
         self.pickle_counter += 1
 
     # def add_data(self): # add a data to local_map list
@@ -247,7 +261,8 @@ class GenerateMap:
     #     return image
 
     def callback_laser_scan(self, scan):
-        if not self.is_init:
+
+        if not self.is_init or self.finish_all:
             return
         # local_map = self.get_local_map()
         # if self.local_map is None or self.current_speed is None or self.language is None:
@@ -256,7 +271,7 @@ class GenerateMap:
         # self.add_data(laser_data)
 
     def callback_map_image(self, image):
-        if not self.is_init:
+        if not self.is_init or self.finish_all:
             return
         try:
             cv_image = self.bridge.imgmsg_to_cv2(image, "mono8")
@@ -268,16 +283,12 @@ class GenerateMap:
             return
         map_array = Utility.normalize(cv_image)
         self.map["data"] = map_array
-        print ("got map")
 
         self.get_local_map()
-        print ("got map0")
 
         self.get_ground_truth_map()
-        print ("got map1")
 
         self.calculate_objectness_language()
-        print ("got map2")
 
         self.save_pickle()
 
@@ -335,9 +346,10 @@ class GenerateMap:
         self.image_pub_ground_truth_annotated.publish(CvBridge().cv2_to_imgmsg(image_gt))
 
     def callback_robot_0(self, odom_data):
-
-        t = self.tf_listner.getLatestCommonTime("/base_link", "/map_server")
-        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/base_link", t)
+        if self.finish_all:
+            return
+        t = self.tf_listner.getLatestCommonTime(self.base_frame, "/map_server")
+        position, quaternion = self.tf_listner.lookupTransform("/map_server", self.base_frame, t)
         if (
                 odom_data.twist.twist.linear.x == 0 and
                 odom_data.twist.twist.linear.y == 0 and
@@ -389,6 +401,18 @@ class GenerateMap:
 
         self.language = return_nodes
 
+    def read_point_description(self):
+        while not self.is_init:
+            time.sleep(0.1)
+            print ("wait for init")
+
+        self.points_description = pickle.load(
+            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(self.map_name), "rb"))
+        position_points = [[i[0].x, i[0].y] for i in self.points_description]
+        description_degree = [[i[1], i[2]] for i in self.points_description]
+        # for points in description_degree:
+        self.points_description = [position_points, description_degree]
+
     def read_from_pickle(self):
         print ("!!!!!read from pickle")
 
@@ -396,21 +420,22 @@ class GenerateMap:
             time.sleep(0.1)
             print ("wait for init")
         print ("read from pickle")
-        self.points_description = pickle.load(
-            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
-        position_points = [[i[0].x, i[0].y] for i in self.points_description]
-        description_degree = [[i[1], i[2]] for i in self.points_description]
-        # for points in description_degree:
-        self.points_description = [position_points, description_degree]
-        # print description_degree
-        if not self.is_online:
-            rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
-        rospy.Subscriber("/scan", LaserScan, self.callback_laser_scan, queue_size=1)
-        rospy.spin()
+        self.read_point_description()
 
+        # if not self.is_online:
+        odom_sub = rospy.Subscriber("/base_pose_ground_truth", Odometry, self.callback_robot_0, queue_size=1)
+        scan_sub = rospy.Subscriber("/scan", LaserScan, self.callback_laser_scan, queue_size=1)
+        while(True):
+            if self.finish_all:
+                self.img_sub.unregister()
+                odom_sub.unregister()
+                scan_sub.unregister()
+                print ("all unregister")
+                break
+        time.sleep(50)
     def append_to_pickle(self):
         self.points_description = pickle.load(
-            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "rb"))
+            open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(self.map_name), "rb"))
 
         # to filter some of previos data:
         self.points_description = [a for a in self.points_description if a[2] == 'open_room' or a[2] == 'close_room']
@@ -433,7 +458,7 @@ class GenerateMap:
                     print self.points_description
 
         pickle.dump(self.points_description,
-                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(MAP_NAME), "wb"))
+                    open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}.p".format(self.map_name), "wb"))
 
     def publish_point(self, coordinate, coordinate_next):
         target_goal_simple = PoseStamped()
@@ -452,10 +477,10 @@ class GenerateMap:
         self.publisher.publish(target_goal_simple)
 
     def point_generator(self):
-        time.sleep(0.1)
+        print ("point generator")
         # we will first generate some short_range path and then long ones
-        short_range = 8
-        long_range = 8#10
+        short_range = 0#8
+        long_range = 1#10
         number_of_short_run = short_range
         number_of_long_run = long_range
 
@@ -467,10 +492,9 @@ class GenerateMap:
             if short_range > 0:
                 short_range -= 1
                 # start_index = random.randint(0, len(self.coordinates) - 100)
-                start_index = start_short
-                start_short += random.randint(((len(self.coordinates) - 100) // number_of_short_run)//2, (len(self.coordinates) - 100) // number_of_short_run)
-                end_index = min(random.randint(start_index + 50, start_index + 100)
-                                , len(self.coordinates)-1)
+                start_index = max(start_short - 10 , 0)
+                start_short += len(self.coordinates) // number_of_short_run
+                end_index = min(start_index + len(self.coordinates) // number_of_short_run + 20, len(self.coordinates)-1)
                 if short_range == 0:
                     end_index = len(self.coordinates) - 1
                 print ("{} short range remaining".format(short_range))
@@ -478,13 +502,18 @@ class GenerateMap:
                 long_range -= 1
                 # start_index = random.randint(0, len(self.coordinates) - 400)
                 start_index = start_long
-                start_long += random.randint(5, (len(self.coordinates) - 200) // number_of_long_run)
-                end_index = random.randint(start_index + 200, len(self.coordinates) - 1)
+                max_start = len(self.coordinates)/2 if (len(self.coordinates) - 200) < 5 else len(self.coordinates) - 200
+
+                start_long += random.randint(5, max_start // number_of_long_run)
                 if long_range == 0:
                     end_index = len(self.coordinates) - 1
+                else:
+                    end_index = random.randint(start_index + 200, len(self.coordinates) - 1)
+
                 print ("{} long range remaining".format(long_range))
             else:
                 print ("finished all for this map")
+                self.finish_all = True
                 break
 
             self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
@@ -502,8 +531,10 @@ class GenerateMap:
             print "start index: ", start_index, " len: ", end_index - start_index
             while not self.is_init:
                 # time.sleep(0.5)
-                self.publish_point(self.coordinates[start_index + 10], self.coordinates[start_index + 12])
+                self.publish_point(self.coordinates[start_index + 2], self.coordinates[start_index + 5])
                 print ("not init yet publish point and waiting to init")
+            self.publish_point(self.coordinates[start_index + 2], self.coordinates[start_index + 5])
+            time.sleep(10)
 
             counter = 30
             while (start_index < end_index):
@@ -526,9 +557,11 @@ class GenerateMap:
                     if counter_to_reset % 30 == 0:
                         self.publish_point(self.coordinates[start_index + (30 - counter_to_reset)//3], self.coordinates[start_index + (30 - counter_to_reset)//3+1])
                     position, quaternion = Utility.get_robot_pose("/map_server")
-                    if self.stop:
+                    if self.stop and  not self.is_online:
                         print ("distance greater waiting for {} seconds".format(counter_to_reset*0.5))
                         counter_to_reset -= 1
+                    else:
+                        counter_to_reset = 30
                 self.publish_point(self.coordinates[start_index],self.coordinates[start_index+1])
                 start_index += 1
 
@@ -552,8 +585,9 @@ class GenerateMap:
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
             #     position, quaternion = Utility.get_robot_pose("/map_server")
+        time.sleep(50)
         print "finish execution"
-
+        exit(0)
     # def call_back_map(self, data):
     #     print (len(data.data))
     #     map_array = np.array(data.data).reshape((data.info.height, data.info.width))
@@ -630,7 +664,9 @@ def make_pose_stamped(pose, degree):
     out.pose.orientation.w = degree
     return out
 
-def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
+
+def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner, target_frame="/base_frame"):
+    target_pose = rospy.get_param(target_frame)
     nodes_pos = np.asarray(nodes[0])
     list_return = []
     min_dist = 100
@@ -641,7 +677,7 @@ def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
         if (dist < max_r):
             degree = degree_to_object(nodes[1][index][0], degree_robot[2])
             pose = make_pose_stamped(point, nodes[1][index][0])
-            pose2 = tf_listner.transformPose("/base_link", pose)
+            pose2 = tf_listner.transformPose(target_pose, pose)
             lang = lang_dic[nodes[1][index][1]](degree)
             if lang != None:
                 list_return.append((index, lang_dic[nodes[1][index][1]](degree), (pose2.pose.position.x, pose2.pose.position.y)))
@@ -651,6 +687,8 @@ def closest_node(robot_pos, nodes, degree_robot, max_r, tf_listner):
 
 if __name__ == '__main__':
     import argparse
+
+    rospy.init_node('GenerateMap')
 
     parser = argparse.ArgumentParser(description='generate map')
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
@@ -662,8 +700,8 @@ if __name__ == '__main__':
     generate_map = GenerateMap(start_pickle=args.start_pickle)
 
     if args.generate_point:
-        # generate_map.write_to_pickle()
         generate_map.write_to_pickle()
+        # generate_map.append_to_pickle()
     else:
         # threading.Thread(target=generate_map.get_local_map).start()
         threading.Thread(target=generate_map.point_generator).start()

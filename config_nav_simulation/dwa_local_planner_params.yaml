@@ -1,7 +1,5 @@
-base_local_planner: dwa_local_planner/DWAPlannerROS
-
 controller:
-  acc_lim_theta: 0.4
+  acc_lim_theta: 0.3
   acc_lim_x: 1.5
   acc_lim_y: 0.1
   allow_init_with_backwards_motion: false
@@ -39,8 +37,8 @@ controller:
   legacy_obstacle_association: false
   max_global_plan_lookahead_dist: 3.0
   max_number_classes: 6
-  max_vel_theta: 2
-  max_vel_x: 2
+  max_vel_theta: 0.3
+  max_vel_x: 1.5
   max_vel_x_backwards: 0.01
   max_vel_y: 0.0
   min_obstacle_dist: 0.8

@@ -1,8 +1,9 @@
 my_costmap:
-  footprint: [[-0.5, -0.35], [-0.5, 0.35], [0.5, 0.35], [0.5, -0.35]]
+  footprint: [[-0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0.3, -0.3]]
+#  [[-0.5, -0.35], [-0.5, 0.35], [0.5, 0.35], [0.5, -0.35]]
   static_map: true
   rolling_window: false
-  robot_base_frame: "/base_link"
+#  robot_base_frame: "/base_link"
   map_topic: "/gmap"
   publish_frequency: 20
   obstacles:

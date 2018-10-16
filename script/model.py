@@ -190,7 +190,7 @@ class Map_Model:
     #     if is_best:
     #         shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
 
-    def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None):
+    def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None, mode="full"):
         self.start = time.time()
 
         self.best_epoch_acc_objectness = None
@@ -233,7 +233,7 @@ class Map_Model:
         else:
             print ("log is off")
             self.logger = None
-        self.model = my_resnet()
+        self.model = my_resnet(mode = mode)
         # self.model = Network_Map((1,(244,244)), self.word_encoding.len_classes())
         if self.use_cuda:
             self.model = self.model.cuda()
@@ -544,7 +544,7 @@ class Map_Model:
         if dataset is None:
             dataset = self.dataset_validation
         if self.dataloader_validation is None:
-            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=5, batch_size=batch_size, drop_last=True)
+            self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=9, batch_size=batch_size, drop_last=True)
         epoch_accuracy_classes, epoch_accuracy_objectness, epoch_loss_total = self.model_forward(batch_size, "validation", iter, plot=plot)
 
         # print('validation loss: %.4f class_accuracy: %.4f' %

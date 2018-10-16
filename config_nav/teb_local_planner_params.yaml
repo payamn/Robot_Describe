@@ -68,7 +68,7 @@ controller:
   weight_kinematics_nh: 1000.0
   weight_kinematics_turning_radius: 1.0
   weight_max_vel_theta: 1.0
-  weight_max_vel_x: 30.0
+  weight_max_vel_x: .3
   weight_max_vel_y: 2.0
   weight_obstacle: 50.0
   weight_optimaltime: 50.0

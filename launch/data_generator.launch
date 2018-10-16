@@ -1,26 +1,44 @@
 <launch>
 	<arg name="base_frame" default="base_link" />
-	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
-	<arg name="odom_frame" default="odom" />
+	 <!--<arg name="odom_frame" default="robot_0/odom_combined" /> -->
+	<arg name="odom_topic" default="odom" />
+	<arg name="odom_frame" default="/odom" />
+	<arg name="map_frame" default="map" />
+
+    <param name="use_sim_time" value="true"/>
+	<param name="map_server_frame" value="map_server"/>
+	<param name="map_frame" value="$(arg map_frame)" />
+	<param name="odom_frame" value="$(arg odom_frame)" />
+	<param name="odom_topic" value="$(arg odom_topic)" />
+	<param name="base_frame" value="$(arg base_frame)" />
+
 	<!--<arg name="transform_pose" default="-30.150 -26.5" />-->
 	<!--<arg name="map_name" default="real_2" />-->
+
 	<!--<arg name="transform_pose" default="-44.2 -44.25" />-->
 	<!--<arg name="map_name" default="aces_map" />-->
+
 	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
 	<!--<arg name="map_name" default="combinenormal" />-->
+
 	<!--<arg name="transform_pose" default="-74.45 -14.3" />-->
 	<!--<arg name="map_name" default="room_door" />-->
 
 	<arg name="transform_pose" default="-34.550 -14.20" />
 	<arg name="map_name" default="fr79" />
+
+	<!--<arg name="transform_pose" default="-26.650 -14.400" />-->
+	<!--<arg name="map_name" default="fr52" />-->
+
 	<!--<arg name="transform_pose" default="-128.150 -24.050" />-->
 	<!--<arg name="map_name" default="as1" />-->
+
 	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->
 	<!--<arg name="map_name" default="real_1" />-->
+
 	<!--<arg name="transform_pose" default="-40.0 -10.10" />-->
 	<!--<arg name="map_name" default="seattle" />-->
 
-	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="person_raw" />
 
@@ -30,8 +48,13 @@
 
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find robot_describe)/worlds/$(arg map_name).world">
 		<!--<remap from="/robot_0/blob" to="/robot_0/blob_0" />-->
-		<!--<remap from="/robot_0/cmd_vel" to="/cmd_vel" />-->
-		<remap from="base_scan" to="scan"/>
+		<remap from="/stage/r0/odometry" to="/odom" />
+
+		<remap from="/stage/r0/cmd_vel" to="/cmd_vel"/>
+		<!--<remap from="stage/r1/base_link" to="base_link"/>-->
+		<!--<remap from="stage/r1/base_laser_link" to="base_laser_link"/>-->
+		<remap from="/stage/r0/ranger_0/laserscan" to="scan"/>
+		<remap from="/base_scan" to="/scan"/>
 		<param name="map_name" value="$(arg map_name)"/>
 	</node>
 
@@ -48,7 +71,7 @@
 		<param name="scale_angular" value="0.5" />
 	</node>
 
-	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+	<node pkg="joy" type="joy_node" name="joy_node" output="log">
 		<remap from="/joy" to="/teleop/joy" />
 		<param name="dev" type="string" value="/dev/input/js0" />
 		<!-- <param name="dev" type="string" value="/dev/input/js1" /> -->
@@ -56,8 +79,10 @@
 	</node>
 
 	<node name="map_server" pkg="map_server" type="map_server"
-		args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="screen">
+		args="$(find robot_describe)/worlds/$(arg map_name).yaml" output="log">
 		<param name="frame_id" value="map_server" />
+		<param name="base_frame" value="$(arg base_frame)"/>
+		<param name="odom_frame" value="$(arg odom_frame)"/>
 	</node>
 	<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="$(arg transform_pose) 0 0 0 0 -1  $(arg odom_frame) map_server 20" />
 	<!--<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="-30.15 -26.5 0 0 0 0 -1 gmap $(arg odom_frame) 100" />-->
@@ -78,7 +103,7 @@
 	<!--Commented for test-->
 
 
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+	<node pkg="rviz" type="rviz" name="rviz" output="log" />
 
 		  <!--args="-d $(find robot_describe)/config/simulation.rviz"/>-->
 

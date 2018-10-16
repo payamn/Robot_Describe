@@ -31,8 +31,11 @@ from pid import PID
 
 
 class GeneratePath:
-    def __init__(self, pickle_dir):
-
+    def __init__(self, pickle_dir, map_name = None, mode = None):
+        if map_name is None or mode is None:
+            self.map_name = MAP_NAME
+            self.mode = MODE
+        self.MAP_NAME = map_name
         self.tf_listner = TransformListener()
         self.MIN_DISTANCE_TO_PUBLISH = 5
         self.MAX_DISTANCE_TO_PUBLISH = 7
@@ -50,6 +53,8 @@ class GeneratePath:
 
         self.publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10, latch=True)
         self.coordinates = []
+        self.base_frame = rospy.get_param("/base_frame")
+
         for file in files:
             with open(file, "rb") as p:
                 data = pickle.load(p)
@@ -59,15 +64,14 @@ class GeneratePath:
         if odom_data.twist.twist.linear.x == 0 and odom_data.twist.twist.linear.y == 0 and odom_data.twist.twist.angular.z == 0:
             print ("robot not moving skiping the sequence")
             return
-
-        t = self.tf_listner.getLatestCommonTime("/base_link", "/map_server")
-        position, quaternion = self.tf_listner.lookupTransform("/map_server", "/base_link", t)
+        t = self.tf_listner.getLatestCommonTime(self.base_frame, "/map_server")
+        position, quaternion = self.tf_listner.lookupTransform("/map_server", self.base_frame, t)
         # print position
         self.positions.append(position)
         self.counter += 1
         if self.counter % 100 == 0:
             pickle.dump(self.positions,
-                        open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/{}.p".format(MAP_NAME, MODE, self.idx), "wb"))
+                        open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/{}.p".format(self.map_name, self.mode, self.idx), "wb"))
             print "saving", self.idx
             print self.positions
             self.positions = []
