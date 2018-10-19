@@ -34,6 +34,7 @@ class DescribeOnline:
     def __init__(self, resume_path, use_ground_truth_eval = True, use_cuda=True, mode="full"):
         rospy.init_node('Describe_Online')
         self.init = False
+        self.init_network = False
         self.is_turning = 1
         self.laser_data = None
         self.local_map = None
@@ -101,11 +102,11 @@ class DescribeOnline:
         classes_out, poses, objectness = self.map_model.model(laser_scan_map, local_maps)
 
         topv, topi = classes_out.data.topk(1)
-
+        self.init_network = True
         if plot:
             self.map_model.word_encoding.visualize_map(local_maps[:, 0, :, :], laser_scan_map[:, 0, :, :], (topi, topv), poses, objectness)
     def callback_odom(self, odom_data):
-        if not self.init:
+        if not self.init or not self.init_network:
             return
         if self.use_ground_truth_eval:
             t = self.generate_map.tf_listner.getLatestCommonTime(self.generate_map.base_frame, "/map_server")
@@ -172,6 +173,7 @@ class DescribeOnline:
         self.get_local_map()
         self.run_network()
 
+
     def get_local_map(self, annotated_publish=True):
         if not self.init:
             return
@@ -195,8 +197,8 @@ if __name__=="__main__":
     parser.add_argument(
         '--model', metavar='model', type=str,
         help='resume checkpoint')
-    parser.set_defaults(model="laser")
-    parser.set_defaults(map_index=3)
+    parser.set_defaults(model="full")
+    parser.set_defaults(map_index=0)
 
     args = parser.parse_args()
     f = open("script/data/map.info", "r")

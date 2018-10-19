@@ -85,7 +85,7 @@ class WordEncoding:
                 self.language_gt[lang][4] = True
 
             # check to remove the point
-            elif (distance > 10 or is_last) and self.language_gt[lang][4]:
+            elif (distance > 8 or is_last) and self.language_gt[lang][4]:
                 # if self.language_gt[lang][0] == "open_room":
                     # print ("open_room")
                 self.classes_acc_track[self.language_gt[lang][0]] .append(self.language_gt[lang][2])
@@ -97,6 +97,7 @@ class WordEncoding:
         # print  self.classes_acc_track
         mean_acc = {lang:[] for lang in  self.classes_acc_track}
         for lang in  self.classes_acc_track:
+            no_gt_matched = len(self.no_gt_matched[lang])
             each_acc_classes = [0, 0, 0, 0]
             for node in self.classes_acc_track[lang]:
                 if node is None:
@@ -105,20 +106,26 @@ class WordEncoding:
                     each_acc_classes[node] += 1
             if len(self.classes_acc_track[lang]) ==0 :
                 continue
+            if len(self.no_gt_matched[lang]) > 0:
+                change = min(len(self.no_gt_matched[lang]), each_acc_classes[3])
+                each_acc_classes[self.classes[lang]] += change
+                each_acc_classes[3] -= change
+                no_gt_matched = len(self.no_gt_matched[lang]) - change
+
             each_acc_classes_percent = [x/float(len(self.classes_acc_track[lang])) for x in each_acc_classes ]
 
             return_dic[lang] = {"each_acc_classes_percent":each_acc_classes_percent,
                                 "classes_acc_track":self.classes_acc_track[lang],
                                 "each_acc_classes": each_acc_classes,
                                 "distance":self.classes_distance[lang],
-                                "no_matched":self.no_gt_matched[lang]
+                                "no_matched":no_gt_matched
                                 }
             if len(self.classes_distance[lang]) == 0:
                 self.classes_distance[lang].append(-1)
             if is_last:
                 print (lang, each_acc_classes_percent, "distance min, max, avg:", np.min(self.classes_distance[lang]),
                        np.max(self.classes_distance[lang]), np.mean(self.classes_distance[lang]), each_acc_classes, len(self.classes_acc_track[lang]))
-                print ("no matched", self.no_gt_matched)
+                print ("no matched", no_gt_matched)
                 print ("")
 
         for lang in lang_del:
@@ -186,10 +193,10 @@ class WordEncoding:
         for group in closest_groups:
             if group == idx:
                 continue
-            if self.points[group][0][1] < 0.25:
+            if self.points[group][0][1] < 0.15:
                 del_nodes.append(group)
                 # print ("dell group")
-            elif self.points[idx][0][1] < 0.25:
+            elif self.points[idx][0][1] < 0.15:
                 del_nodes.append(idx)
                 # print ("dell group")
 
@@ -261,7 +268,7 @@ class WordEncoding:
     def appropriate_point_class(self, point, objectness,class_lable):
         not_publish_point = 0
 
-        distance = 1
+        distance = 1.5
         self.del_old_nodes()
         closest_points = self.closest_node(point, distance)
 
@@ -295,7 +302,7 @@ class WordEncoding:
 
         for index, point in enumerate (self.points):
             distance =  math.sqrt(math.pow(point[0][0][0] - position_robot[0], 2) +  math.pow(point[0][0][1] - position_robot[1], 2))
-            if not point[0][4] and point[0][1] > 0.25:
+            if not point[0][4] and point[0][1] > 0.15:
                 angle = (euler_r[2] - math.atan2(point[0][0][1] - position_robot[1],
                                                  point[0][0][0] - position_robot[0])) * 180 / math.pi
 
@@ -378,7 +385,7 @@ class WordEncoding:
             pose_msgs[mode].header.frame_id = map_frame
             pose_msgs[mode].header.stamp = rospy.Time.now()
             for point in publish_list[mode]:
-                if point[2] < 0.2:
+                if point[2] < 0.15:
                     # objectness less than 0.2
                     continue
                 pose_msg = Pose()
@@ -444,6 +451,7 @@ class WordEncoding:
             cv.namedWindow("map")
             cv.namedWindow("laser map")
             cv.imshow("map", backtorgb)
+            cv.imshow("laser map", backtorgb_laser)
             # print ("predict:")
             # print predict
             # print ("target")
