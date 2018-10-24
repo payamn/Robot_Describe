@@ -42,6 +42,8 @@ class GenerateMap:
         print ("in generate map")
         self.map_name = map_name
         self.map_offset = map_offset
+        self.map_status = "unexplored"
+        self.finish_first = False
         self.mode = mode
         if map_name is None or map_offset is None or mode is None:
             self.map_name = MAP_NAME
@@ -190,6 +192,7 @@ class GenerateMap:
             self.image_pub_ground_truth_annotated, map_topic_name="/map_server")
 
     def get_local_map(self, annotated_publish=True):
+
         self.get_map_info()
         # time.sleep(5)
         if not self.map.has_key("info") or not self.is_init:
@@ -198,6 +201,8 @@ class GenerateMap:
                 self.map["info"], self.map["data"], self.language, self.image_pub, self.image_pub_annotated, dilate=True)
 
     def get_data(self):
+        if not self.is_init:
+            return None
         # while (not self.new_data_ready or not self.is_init):
         #     time.sleep(10)
         self.new_data_ready = False
@@ -475,12 +480,26 @@ class GenerateMap:
         target_goal_simple.header.frame_id = 'map_server'
         target_goal_simple.header.stamp = rospy.Time.now()
         self.publisher.publish(target_goal_simple)
+    def go_to_begining(self):
+        self.publish_point(self.coordinates[1], self.coordinates[5])
+        position, quaternion = Utility.get_robot_pose("/map_server")
 
+        while (Utility.distance_vector(position[:2], self.coordinates[1][:2]) > 1.5):
+            position, quaternion = Utility.get_robot_pose("/map_server")
+            self.publish_point(self.coordinates[1], self.coordinates[5])
+            time.sleep(5)
+
+        print ("at begining")
     def point_generator(self):
         print ("point generator")
         # we will first generate some short_range path and then long ones
-        short_range = 0#8
-        long_range = 1#10
+        just_onse = True # if true will not do short or long range
+        point_generator_init = False
+
+        times_left = 2
+        short_range = 8
+        long_range = 10
+
         number_of_short_run = short_range
         number_of_long_run = long_range
 
@@ -489,7 +508,12 @@ class GenerateMap:
 
         while True:
             random.seed(a=None)
-            if short_range > 0:
+            if just_onse:
+                start_index = 0
+                end_index = len(self.coordinates) -1
+                times_left -= 1
+
+            elif short_range > 0:
                 short_range -= 1
                 # start_index = random.randint(0, len(self.coordinates) - 100)
                 start_index = max(start_short - 10 , 0)
@@ -516,8 +540,12 @@ class GenerateMap:
                 self.finish_all = True
                 break
 
-            self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
-            self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+2])
+            self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+14])
+
+            if not just_onse or not point_generator_init:
+                self.move_robot_to_pose_reset_gmap(self.coordinates[start_index], self.coordinates[start_index+4])
+                point_generator_init = True
+
             # self.publish_point(self.coordinates[start_index+10], self.coordinates[start_index+12])
             # time.sleep(0.5)
             start_index += 14
@@ -533,8 +561,13 @@ class GenerateMap:
                 # time.sleep(0.5)
                 self.publish_point(self.coordinates[start_index + 2], self.coordinates[start_index + 5])
                 print ("not init yet publish point and waiting to init")
-            self.publish_point(self.coordinates[start_index + 2], self.coordinates[start_index + 5])
-            time.sleep(10)
+
+            time.sleep(5)
+            self.publish_point(self.coordinates[start_index + 3], self.coordinates[start_index + 6])
+            time.sleep(5)
+
+            self.publish_point(self.coordinates[start_index + 6], self.coordinates[start_index + 9])
+            time.sleep(5)
 
             counter = 30
             while (start_index < end_index):
@@ -579,13 +612,29 @@ class GenerateMap:
                     #     (output, err) = p.communicate()
                     #     # p.wait()
                     break
+            if just_onse and times_left > 0:
+                time.sleep(10)
+                self.is_init = False
+                self.finish_first = True
+
+                print ("setting init to false to go to first point")
+                time.sleep(10)
+                self.go_to_begining()
+                time.sleep(10)
+                self.is_init = True
+                print ("init done")
+
+                continue
+            if just_onse and times_left <= 0:
+                break
             self.is_init = False
-            print ("problem initing again")
             time.sleep(0.01)
             # while (Utility.distance_vector(position[:2], self.coordinates[index-1][:2]) > 0.5):
             #     time.sleep(0.1)
             #     position, quaternion = Utility.get_robot_pose("/map_server")
-        time.sleep(50)
+        time.sleep(10)
+        self.finish_all = True
+        time.sleep(30)
         print "finish execution"
         exit(0)
     # def call_back_map(self, data):
@@ -694,13 +743,13 @@ if __name__ == '__main__':
     parser.add_argument('--generate_point', dest='generate_point', action='store_true')
     parser.add_argument('--start_pickle', type=int, default=0)
     # parser.add_argument('--foo', type=int, default=42, help='FOO!')
-    parser.set_defaults(generate_point=False)
+    parser.set_defaults(generate_point=True)
     args = parser.parse_args()
 
     generate_map = GenerateMap(start_pickle=args.start_pickle)
 
     if args.generate_point:
-        generate_map.write_to_pickle()
+        generate_map.append_to_pickle()
         # generate_map.append_to_pickle()
     else:
         # threading.Thread(target=generate_map.get_local_map).start()

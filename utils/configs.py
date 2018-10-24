@@ -1,8 +1,8 @@
-MAP_NAME = "fr79"
-X_OFFSET = -34.550
-Y_OFFSET =  -14.20
+MAP_NAME = "real_1"
+X_OFFSET = -35.000
+Y_OFFSET = -13.200
 
-MODE = "train" # train or test
+MODE = "test" # train or test
 
 
 """
@@ -33,8 +33,8 @@ X_OFFSET = -40.0
 Y_OFFSET = -10.10
 
 MAP_NAME = "room_door"
-X_OFFSET = -74.45
-Y_OFFSET =  -14.3
+X_OFFSET = -55.835
+Y_OFFSET =  -10.725
 
 MAP_NAME = "as1"
 X_OFFSET = -128.150

@@ -47,8 +47,13 @@ class WordEncoding:
     def len_classes(self):
         return len(self.classes)
 
-    # def get_parent_class(self, idx):
-    #     return self.parent_class_dic[idx]
+    def re_init(self):
+        self.classes_acc_track = {"close_room": [], "open_room": [], "corridor": []}
+        self.no_gt_matched = {"close_room": [], "open_room": [], "corridor": []}
+        self.classes_distance = {"close_room": [], "open_room": [], "corridor": []}
+        self.points = []
+        self.language_gt = {}
+
     def del_old_nodes(self):
         now = time.time()
         del_nodes = []
@@ -68,6 +73,7 @@ class WordEncoding:
         :param is_last: if it is the last call of this function to calculate ground truth for all the language topics
         :return: return is a dictionary containing accuracy untill this point
         """
+
         return_dic = {}
         position_robot, quaternion_robot = Utility.get_robot_pose(self.frame_origin)
         for lang in langs:
@@ -85,7 +91,7 @@ class WordEncoding:
                 self.language_gt[lang][4] = True
 
             # check to remove the point
-            elif (distance > 8 or is_last) and self.language_gt[lang][4]:
+            if (distance > 8 or is_last) and self.language_gt[lang][4]:
                 # if self.language_gt[lang][0] == "open_room":
                     # print ("open_room")
                 self.classes_acc_track[self.language_gt[lang][0]] .append(self.language_gt[lang][2])
@@ -93,7 +99,8 @@ class WordEncoding:
                 if self.language_gt[lang][2] is not None and self.language_gt[lang][0] == self.classes_labels[self.language_gt[lang][2]]:
                     self.classes_distance[self.language_gt[lang][0]].append(self.language_gt[lang][3])
                     # print ("mean distance:", self.language_gt[lang][0], np.mean(self.classes_distance[self.language_gt[lang][0]]))
-
+            elif distance < 4:
+                self.language_gt[lang][4] = True
         # print  self.classes_acc_track
         mean_acc = {lang:[] for lang in  self.classes_acc_track}
         for lang in  self.classes_acc_track:
@@ -104,10 +111,12 @@ class WordEncoding:
                     each_acc_classes[3] += 1
                 else:
                     each_acc_classes[node] += 1
-            if len(self.classes_acc_track[lang]) ==0 :
+            if len(self.classes_acc_track[lang]) ==0:
+                if is_last:
+                    print (lang, "len 0 no matched:", len(self.no_gt_matched[lang]))
                 continue
             if len(self.no_gt_matched[lang]) > 0:
-                change = min(len(self.no_gt_matched[lang]), each_acc_classes[3])
+                change = min(len(self.no_gt_matched[lang]), each_acc_classes[3], 1)
                 each_acc_classes[self.classes[lang]] += change
                 each_acc_classes[3] -= change
                 no_gt_matched = len(self.no_gt_matched[lang]) - change
@@ -130,6 +139,7 @@ class WordEncoding:
 
         for lang in lang_del:
             self.language_gt.__delitem__(lang)
+
         return return_dic
     def closest_node(self, node, limit):
 
@@ -217,18 +227,23 @@ class WordEncoding:
         position_robot, quaternion_robot = Utility.get_robot_pose(self.frame_origin)
 
         matched = "Nothing"
-        desire_dist = 1.2
+        desire_dist_same_class = 2
+        desire_dist_different_class = 1.2
 
-        if class_lable == 0 or class_lable == 2:
-            desire_dist = 2
-
-        min_distance = 100
+        min_distance = 10000
         for lang in self.language_gt:
             distance =  Utility.distance_vector(self.language_gt[lang][1], point)
-            if distance < desire_dist and distance < min_distance:
-                min_distance = distance
-                matched = lang
-
+            if (self.language_gt[lang][2] == class_lable and distance < desire_dist_same_class) or (self.language_gt[lang][2] != class_lable and distance < desire_dist_different_class):
+                change = False
+                if matched == "Nothing":
+                    change = True
+                elif self.language_gt[matched][2] != class_lable and (min_distance > distance or self.language_gt[lang][2] == class_lable):
+                    change = True
+                elif self.language_gt[matched][2] == class_lable and self.language_gt[lang][2] == class_lable and min_distance > distance:
+                    change = True
+                if change:
+                    matched = lang
+                    min_distance = distance
         if prev_match_gt == matched:
             return matched
 
@@ -268,7 +283,7 @@ class WordEncoding:
     def appropriate_point_class(self, point, objectness,class_lable):
         not_publish_point = 0
 
-        distance = 1.5
+        distance = 1.3
         self.del_old_nodes()
         closest_points = self.closest_node(point, distance)
 
@@ -385,7 +400,7 @@ class WordEncoding:
             pose_msgs[mode].header.frame_id = map_frame
             pose_msgs[mode].header.stamp = rospy.Time.now()
             for point in publish_list[mode]:
-                if point[2] < 0.15:
+                if point[2] < 0.45:
                     # objectness less than 0.2
                     continue
                 pose_msg = Pose()

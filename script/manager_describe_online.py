@@ -18,8 +18,8 @@ all_ros_required_nodes = [
                             "/stageros_node",
                             "/teleop_node"
                         ]
-def start_process(map_index, model):
-    process_str = 'python script/describe_online.py --map_index ' + str(map_index) + ' --model ' + model
+def start_process(map_index, model, file_index):
+    process_str = 'python script/describe_online.py --map_index ' + str(map_index) + " --file_index " +str(file_index)+' --model ' + model
     print process_str
     p = subprocess.Popen(process_str, stdout=None, shell=True)
     time.sleep(90)
@@ -54,6 +54,8 @@ def kill_after_error():
 if __name__=="__main__":
     kill_after_error()
     f = open("script/data/map.info", "r")
+    start_file_index = 3
+    end_file_index = 21
     maps = []
     line = f.readline()
     while (line):
@@ -66,52 +68,52 @@ if __name__=="__main__":
                    "laser":"checkpoints_laser_final/model_best_epoch_accuracy_classes.pth.tar",
                    "map":"checkpoints_map_final/model_best_epoch_accuracy_classes.pth.tar"}
     global MAP_NAME, OFFSET_MAP, MODE
-    for map_index in range(len(maps)):
-        for model in models:
-            start_process(map_index, model)
-            time_out = 0
+    for file_index in range (start_file_index, end_file_index):
+        save_path = os.path.join("map_results/", str(file_index)+"/map_results_explored/")
+        for map_index in range(len(maps)):
+            for model in models:
+                # model = "full"
+                start_process(map_index, model, file_index)
+                time_out = 0
 
+                ls = os.popen("ls " + save_path + " -ntr  | wc -l").readlines()
+                ls = int(ls[0].replace("\n", ""))
 
-            ls = os.popen("ls map_results/ -ntr  | wc -l").readlines()
-            ls = int(ls[0].replace("\n", ""))
-
-            while True:
+                while True:
+                    try:
+                        status = {x:0 for x in all_ros_required_nodes}
+                        nodes = os.popen("rosnode list").readlines()
+                        for i in range(len(nodes)):
+                            nodes[i] = nodes[i].replace("\n", "")
+                        number_died_nodes = 0
+                        ls_new = os.popen("ls " +save_path + " -ntr  | wc -l").readlines()
+                        ls_new = int(ls_new[0].replace("\n", ""))
+                        if ls_new > ls:
+                            break
+                        for node in nodes:
+                            status[node] = 1
+                        for node in status:
+                            if status[node] == 0:
+                                number_died_nodes += 1
+                        if number_died_nodes > 0:
+                            time_out += 1
+                            print ("some node died", number_died_nodes, "waiting", time_out, "out of", 60)
+                        if time_out > 60:
+                            print ("reset the current map by calling emergency kill as timeout and nodes was killed", number_died_nodes, status)
+                            kill_all()
+                            time_out = 0
+                            start_process(map_index, model, file_index)
+                        time.sleep(1)
+                    except Exception as e:
+                        print e, "reset the current map by calling emergency kill"
+                        kill_after_error()
+                        time.sleep(30)
+                        start_process(map_index, model, file_index)
+                #killall ros nodes
                 try:
-                    status = {x:0 for x in all_ros_required_nodes}
-                    nodes = os.popen("rosnode list").readlines()
-                    for i in range(len(nodes)):
-                        nodes[i] = nodes[i].replace("\n", "")
-                    # is stage allive
-                    stage = False
-                    number_died_nodes = 0
-                    ls_new = os.popen("ls map_results/ -ntr  | wc -l").readlines()
-                    ls_new = int(ls_new[0].replace("\n", ""))
-                    if ls_new > ls:
-                        break
-                    for node in nodes:
-                        status[node] = 1
-                    for node in status:
-                        if status[node] == 0:
-                            number_died_nodes += 1
-                    if number_died_nodes > 0:
-                        time_out += 1
-                        print ("some node died", number_died_nodes, "waiting", time_out, "out of", 60)
-                    if time_out > 60:
-                        print ("reset the current map by calling emergency kill as timeout and nodes was killed", number_died_nodes, status)
-                        kill_all()
-                        time_out = 0
-                        start_process(map_index, model)
-                    time.sleep(1)
+                    kill_all()
                 except Exception as e:
-                    print e, "reset the current map by calling emergency kill"
+                    print e, "kill all failed calling emergency kill and continue"
                     kill_after_error()
                     time.sleep(30)
-                    start_process(map_index, model)
-            #killall ros nodes
-            try:
-                kill_all()
-            except Exception as e:
-                print e, "kill all failed calling emergency kill and continue"
-                kill_after_error()
-                time.sleep(30)
-                continue
+                    continue

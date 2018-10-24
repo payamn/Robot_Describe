@@ -69,7 +69,7 @@ class GeneratePath:
         # print position
         self.positions.append(position)
         self.counter += 1
-        if self.counter % 100 == 0:
+        if self.counter % 10 == 0:
             pickle.dump(self.positions,
                         open(rospkg.RosPack().get_path('robot_describe') + "/script/data/{}_{}/{}.p".format(self.map_name, self.mode, self.idx), "wb"))
             print "saving", self.idx

@@ -29,7 +29,7 @@ window
 floorplan
 (
   name "room_door"
-  size [148.900 28.600 0.800]
+  size [ 111.67 21.45 0.800]
   pose [0.000 0.000 0.000 0.000]
   bitmap "room_door.png"
 )

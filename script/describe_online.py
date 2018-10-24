@@ -29,10 +29,15 @@ from utils import model_utils
 MAP_NAME = None
 OFFSET_MAP = None
 MODE = None
+
+
 class DescribeOnline:
 
-    def __init__(self, resume_path, use_ground_truth_eval = True, use_cuda=True, mode="full"):
+    def __init__(self, resume_path, use_ground_truth_eval = True, use_cuda=True, mode="full", file_index=0):
         rospy.init_node('Describe_Online')
+        self.save_path = os.path.join("map_results/", str(file_index))
+        os.system("mkdir -p " + os.path.join(self.save_path, "map_results_unexplored"))
+        os.system("mkdir -p " + os.path.join(self.save_path, "map_results_explored"))
         self.init = False
         self.init_network = False
         self.is_turning = 1
@@ -56,6 +61,8 @@ class DescribeOnline:
         self.use_cuda = use_cuda
         self.language_gt = {}
         self.finish = False
+
+
 
 
         self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.callback_laser_scan, queue_size=1)
@@ -102,9 +109,10 @@ class DescribeOnline:
         classes_out, poses, objectness = self.map_model.model(laser_scan_map, local_maps)
 
         topv, topi = classes_out.data.topk(1)
-        self.init_network = True
         if plot:
             self.map_model.word_encoding.visualize_map(local_maps[:, 0, :, :], laser_scan_map[:, 0, :, :], (topi, topv), poses, objectness)
+        self.init_network = True
+
     def callback_odom(self, odom_data):
         if not self.init or not self.init_network:
             return
@@ -131,10 +139,19 @@ class DescribeOnline:
                                         , self.generate_map.tf_listner,
                                         target_frame="map_server_frame")
 
-            return_dic = self.map_model.word_encoding.update_language_ground_truth(language, self.generate_map.finish_all)
-
+            if self.generate_map.finish_first:
+                self.generate_map.finish_first = False
+                return_dic = self.map_model.word_encoding.update_language_ground_truth(language, True)
+                self.map_model.word_encoding.re_init()
+                pickle.dump(return_dic, open(os.path.join(self.save_path+"/map_results_unexplored/", MAP_NAME + "_" + self.mode + "_" +
+                                                          MODE), "wb"))
+                print ("reinit for generate map")
+            if self.generate_map.is_init:
+                return_dic = self.map_model.word_encoding.update_language_ground_truth(language, self.generate_map.finish_all)
+            else:
+                return
             if self.generate_map.finish_all:
-                pickle.dump(return_dic, open(os.path.join("map_results/", MAP_NAME + "_" + self.mode + "_" +
+                pickle.dump(return_dic, open(os.path.join(self.save_path+"/map_results_explored/", MAP_NAME + "_" + self.mode + "_" +
                                                           MODE), "wb"))
                 self.finish = True
                 self.init = False
@@ -143,15 +160,15 @@ class DescribeOnline:
                 self.odom_sub.unregister()
                 self.t1._Thread__stop()
                 self.t2._Thread__stop()
-
-        self.map_model.word_encoding.near_robot_classes()
+        if self.generate_map.is_init:
+            self.map_model.word_encoding.near_robot_classes()
 
         # if self.use_ground_truth_eval:
         #     # save ground truth language:
         #     self.generate_map.callback_robot_0(odom)
 
     def callback_map_image(self, image):
-        if not self.init:
+        if not self.init or not self.generate_map.is_init:
             return
         # print ("in call back image")
         try:
@@ -195,10 +212,14 @@ if __name__=="__main__":
         '--map_index', metavar='map_index', type=int,
         help='map_index')
     parser.add_argument(
+        '--file_index', metavar='file_index', type=int,
+        help='file_index')
+    parser.add_argument(
         '--model', metavar='model', type=str,
         help='resume checkpoint')
     parser.set_defaults(model="full")
-    parser.set_defaults(map_index=0)
+    parser.set_defaults(map_index=7)
+    parser.set_defaults(file_index=7)
 
     args = parser.parse_args()
     f = open("script/data/map.info", "r")
@@ -230,7 +251,7 @@ if __name__=="__main__":
     MAP_NAME = map[0]
     OFFSET_MAP = (map[1], map[2])
 
-    describe_online = DescribeOnline(models[model], use_cuda=torch.cuda.is_available(), mode=model)
+    describe_online = DescribeOnline(models[model], use_cuda=torch.cuda.is_available(), mode=model, file_index=args.file_index)
 
 
     while True:

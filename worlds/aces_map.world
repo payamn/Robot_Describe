@@ -29,7 +29,7 @@ window
 floorplan
 (
   name "aces_map"
-  size [88.4 88.5 0.800]
+  size [88.400 88.500 0.800]
   pose [0.000 0.000 0.000 0.000]
   bitmap "aces_map.png"
 )

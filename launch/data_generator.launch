@@ -21,11 +21,11 @@
 	<!--<arg name="transform_pose" default="-67.5 -19.875" />-->
 	<!--<arg name="map_name" default="combinenormal" />-->
 
-	<!--<arg name="transform_pose" default="-74.45 -14.3" />-->
+	<!--<arg name="transform_pose" default="-55.835 -10.725" />-->
 	<!--<arg name="map_name" default="room_door" />-->
 
-	<arg name="transform_pose" default="-34.550 -14.20" />
-	<arg name="map_name" default="fr79" />
+	<!--<arg name="transform_pose" default="-34.550 -14.20" />-->
+	<!--<arg name="map_name" default="fr79" />-->
 
 	<!--<arg name="transform_pose" default="-26.650 -14.400" />-->
 	<!--<arg name="map_name" default="fr52" />-->
@@ -33,8 +33,8 @@
 	<!--<arg name="transform_pose" default="-128.150 -24.050" />-->
 	<!--<arg name="map_name" default="as1" />-->
 
-	<!--<arg name="transform_pose" default="-35.000 -13.200" />-->
-	<!--<arg name="map_name" default="real_1" />-->
+	<arg name="transform_pose" default="-35.000 -13.200" />
+	<arg name="map_name" default="real_1" />
 
 	<!--<arg name="transform_pose" default="-40.0 -10.10" />-->
 	<!--<arg name="map_name" default="seattle" />-->
@@ -67,8 +67,8 @@
 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
 		<!--<remap from="cmd_vel" to="robot_0/cmd_vel" />-->
-		<param name="scale_linear" value="100.75" />
-		<param name="scale_angular" value="0.5" />
+		<param name="scale_linear" value="10000.75" />
+		<param name="scale_angular" value="1" />
 	</node>
 
 	<node pkg="joy" type="joy_node" name="joy_node" output="log">
