@@ -3,6 +3,9 @@ from cv_bridge import CvBridge
 import numpy as np
 from geometry_msgs.msg import Pose, PoseArray
 from visualization_msgs.msg import Marker
+import std_msgs.msg as std_msg
+import visualization_msgs.msg as vis_msg
+import geometry_msgs.msg as geom_msg
 import tf
 import matplotlib.pyplot as plt
 from tf import TransformerROS
@@ -17,6 +20,64 @@ import rospy
 
 import time
 
+def publish_octomap(pub_ns, arr, carr=None, size=0.1, stamp=None, frame_id='map', flip_rb=False, marker_publisher = None, visualiztion=None, id=0, color=None):
+    """
+    Publish cubes list:
+    """
+    if visualiztion is None:
+        visualiztion = vis_msg.Marker.points
+    if color is None:
+        color = std_msg.ColorRGBA(1, 0.1, 0.2, 1.0)
+    marker = vis_msg.Marker(type=visualiztion, ns=pub_ns, action=vis_msg.Marker.ADD)
+
+    if visualiztion == vis_msg.Marker.CYLINDER:
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = arr[0]
+        marker.pose.position.y = arr[1]
+        marker.pose.position.z = 0.1
+        marker.color = color
+
+    else:
+        marker.points = [geom_msg.Point(element[0], element[1], 0.1) for element in arr]
+
+    marker.id = id
+    # id += 1
+    marker.header.frame_id = frame_id
+    marker.header.stamp = stamp if stamp is not None else rospy.Time.now()
+
+    # Point width, and height
+    marker.scale.x = size
+    marker.scale.y = size
+    marker.scale.z = size
+
+    # marker.color.a = 1.0
+    # marker.color.r = 0.4
+    # marker.color.g = 0.2
+    # marker.color.b = 0.1
+
+    N = len(arr)
+
+    # XYZ
+
+    # RGB (optionally alpha)
+    rax, bax = 0, 2
+    # carr = carr.astype(np.float32) * 1.0 / 255
+    if flip_rb: rax, bax = 2, 0
+    if carr is None:
+        marker.colors = [color
+                         for j in arr]
+    elif D == 3:
+        marker.colors = [std_msg.ColorRGBA(1, 0.1, 0.2, 1.0)
+                         for j in arr]
+    elif D == 4:
+        marker.colors = [std_msg.ColorRGBA(carr[j, rax], carr[j, 1], carr[j, bax], carr[j, 3])
+                         for j in inds]
+
+    marker.lifetime = rospy.Duration(3000)
+    if marker_publisher is None:
+        marker_publisher = rospy.Publisher('marker_cube', Marker, queue_size=1, latch=True)
+
+    marker_publisher.publish(marker)
 
 
 class WordEncoding:
@@ -36,6 +97,7 @@ class WordEncoding:
             "corridor": rospy.Publisher('corridor', PoseArray, queue_size=10, latch=True)
         }
         self.marker_publisher = rospy.Publisher('mark', Marker, queue_size=1, latch=True)
+        self.marker_cube_publisher = rospy.Publisher('mark_cube', Marker, queue_size=4, latch=True)
         self.id_marker = 1
         self.classes_acc_track = {"close_room": [], "open_room": [], "corridor": []}
         self.no_gt_matched = {"close_room": [], "open_room": [], "corridor": []}
@@ -43,7 +105,7 @@ class WordEncoding:
         self.points = []
         self.tf_ros = TransformerROS()
         self.language_gt = {}
-        self.frame_origin = "/map_server"
+        self.frame_origin = "/map"
     def len_classes(self):
         return len(self.classes)
 
@@ -359,19 +421,23 @@ class WordEncoding:
                     marker.action = marker.ADD
                     marker.scale.x = 0.3
                     marker.scale.y = 0.3
-                    marker.scale.z = 0.4
+                    marker.scale.z = 0.3
                     marker.color.a = 1.0
-                    marker.color.r = 0.4
-                    marker.color.g = 0.2
-                    marker.color.b = 0.1
-                    marker.lifetime = rospy.Duration(20)
+                    marker.color.r = 0.0
+                    marker.color.g = 0.0
+                    marker.color.b = 0.6
+                    marker.lifetime = rospy.Duration(5)
                     marker.pose.orientation.w = 1.0
                     marker.pose.position.x = (point[0][0][0] + 2 * position_robot[0]) / 3
                     marker.pose.position.y = (point[0][0][1] + 2 * position_robot[1]) / 3
-                    marker.pose.position.z = 0
+                    marker.pose.position.z = 3
                     self.id_marker += 1
                     self.marker_publisher.publish(marker)
                     self.points[index][0] = (point[0][0], point[0][1], point[0][2], point[0][3], True, point[0][5])
+
+
+
+
     def publish_point_around_robot(self, points, map_frame="map_server"):
         """
 
@@ -393,16 +459,37 @@ class WordEncoding:
         }
         for point in self.points:
             publish_list[self.classes_labels[point[0][2]]].append((point[0][0][0], point[0][0][1], point[0][1]))
+        id = 2
+        for point in publish_list["close_room"]:
+
+            publish_octomap("close_room", point, size=0.8, frame_id=map_frame, flip_rb=False,
+                            marker_publisher=self.marker_cube_publisher, visualiztion=vis_msg.Marker.CYLINDER, id=id, color=std_msg.ColorRGBA(0.0, 1, 0, 0.7))
+            id +=1
+
+        publish_octomap("open_room", publish_list["open_room"], size=0.8, frame_id=map_frame, flip_rb=False,
+                        marker_publisher=self.marker_cube_publisher, visualiztion=vis_msg.Marker.SPHERE_LIST, id=0, color=std_msg.ColorRGBA(0.0, 0.0, 1, 0.7))
+
+        publish_octomap("corridor", publish_list["corridor"], size=1, frame_id=map_frame, flip_rb=False,
+                        marker_publisher=self.marker_cube_publisher, visualiztion=vis_msg.Marker.CUBE_LIST, id=1, color=std_msg.ColorRGBA(0.8, 0.0, 0.8, 0.7))
         for mode in self.classes:
             if mode not in publish_list:
                 continue
             pose_msgs[mode] = PoseArray()
             pose_msgs[mode].header.frame_id = map_frame
             pose_msgs[mode].header.stamp = rospy.Time.now()
+
+
+
+
+
             for point in publish_list[mode]:
                 if point[2] < 0.45:
                     # objectness less than 0.2
                     continue
+
+
+
+
                 pose_msg = Pose()
                 pose_msg.position.x = point[0]
                 pose_msg.position.y = point[1]
@@ -462,7 +549,7 @@ class WordEncoding:
                                 color = (255,0,0)
                             cv.circle(backtorgb, pose, 4, color)
                             cv.circle(backtorgb_laser, pose, 4, color)
-            self.publish_point_around_robot(publish_poses)
+            self.publish_point_around_robot(publish_poses, "map")
             cv.namedWindow("map")
             cv.namedWindow("laser map")
             cv.imshow("map", backtorgb)
@@ -492,11 +579,11 @@ class WordEncoding:
 
 
 def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=None, transform=None, circle_size=3,
-                 resize=None):
+                 resize=None, dest_laser_range=8):
     fov = float(fov)
     degree_steps = fov/len(laser_array)
     map = np.zeros((dest_size, dest_size, 1))
-    to_map_coordinates = float(dest_size)/8.0
+    to_map_coordinates = float(dest_size)/dest_laser_range
     lasers = [((len(laser_array)/2-index)*degree_steps, x) for index, x in enumerate(laser_array)]
 
     for laser in lasers:
@@ -504,7 +591,7 @@ def laser_to_map(laser_array, fov, dest_size, max_range_laser, rotate_degree=Non
         y = laser[1] * np.sin(laser[0]/180*np.pi) * max_range_laser
 
         x = x * to_map_coordinates
-        y = (-y + 8.0/2.) * to_map_coordinates
+        y = (-y + dest_laser_range/2.) * to_map_coordinates
         if resize:
             # x = x * resize + (1 - resize) * 1 * dest_size
             x = x * resize
