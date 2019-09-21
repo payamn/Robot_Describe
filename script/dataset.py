@@ -60,7 +60,7 @@ class Laser_Dataset(Dataset):
             return word_encoded_class, word_encoded_pose, speeds,laser_scans
 
 class Map_Dataset(Dataset):
-    def __init__(self, _dataset_directory=None, augmentation=False):
+    def  __init__(self, _dataset_directory=None, augmentation=False):
         """
 
         :param _dataset_directory: directory containing pickle files
@@ -75,6 +75,18 @@ class Map_Dataset(Dataset):
         self.augmentation = augmentation
         self.augmentation_level = 0
         print (_dataset_directory, "augmentation: ", augmentation)
+        # self.get_info()
+    def get_info(self):
+        dataset_counter = {"close_room": 0, "open_room": 0, "corridor": 0}
+
+        for idx, file in enumerate (self.files):
+            dic_data = pickle.load(open(file, 'rb'))
+            language = dic_data["language"]
+            for lang in language:
+                dataset_counter[lang[1]] += 1
+            if idx %100==0:
+                print idx, len(self.files)
+        print self._dataset_directory, dataset_counter
 
     def set_augmentation_level(self, number):
         if number != self.augmentation_level:
@@ -86,7 +98,7 @@ class Map_Dataset(Dataset):
     def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, i):
+    def __getitem__(self, i):   
         with open(self.files[i], 'rb') as f:
             try:
                 dic_data = pickle.load(f)
@@ -98,22 +110,25 @@ class Map_Dataset(Dataset):
         local_maps = dic_data["local_maps"]
 
         laser_scans_temp = np.asarray(laser_scans)
-        laser_scans = laser_scans_temp+ np.random.rand(laser_scans_temp.shape[0]) / (constants.MAX_RANGE_LASER * 7.0)
+        # laser_scans = laser_scans_temp+ np.random.rand(laser_scans_temp.shape[0]) / (constants.MAX_RANGE_LASER * 7.0)
         angle = None
         transform = None
         resize = None
         if self.augmentation:
-            if self.augmentation_level > 0:
+            if self.augmentation_level == 1 or  self.augmentation_level>3:
                 # max transform pose is +0.2 out of 1
-                transform = (random.randint(-2000, 0) / 10000.0, random.randint(-2000, 2000) / 10000.0)
+                # transform = (random.randint(-2000, 0) / 10000.0, random.randint(-2000, 2000) / 10000.0)
+                transform = (-0.2, 0.2)
 
-            if self.augmentation_level > 1:
+            if self.augmentation_level == 2 or self.augmentation_level>3:
                 # max angle transform -+35 degree
-                angle = random.randint(-350, 350)/10.0
+                # angle = random.randint(-350, 350)/10.0
+                angle = 30
 
-            if self.augmentation_level > 2:
+            if self.augmentation_level == 3 or self.augmentation_level>3:
                 # resize between 0.85x to 1.15x
-                resize = random.randint(85,115)/100.0
+                # resize = random.randint(85,115)/100.0
+                resize = 1.11
 
 
         word_encoded = []
@@ -181,6 +196,12 @@ class Map_Dataset(Dataset):
         target_classes = target[ :, :, :, 3:]
         target_poses = target[ :, :, :, 1:3]
         target_objectness = target[ :, :, :, 0]
+        if  self.augmentation_level ==0:
+            cv2.imwrite("augmentation/" + str(i) + "_original_map.png", local_maps)
+            laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 320, constants.MAX_RANGE_LASER,
+                                                      angle, transform, resize=resize, dest_laser_range=16)
+            laser_scan_map.squeeze(2)
+            cv2.imwrite("augmentation/" + str(i) + "_original_laser.png",laser_scan_map)
 
         laser_scan_map = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize)
         # laser_scan_map_low = model_utils.laser_to_map(laser_scans, constants.LASER_FOV, 240, constants.MAX_RANGE_LASER, angle, transform, resize=resize, circle_size=1)
@@ -193,11 +214,17 @@ class Map_Dataset(Dataset):
 
         laser_scan_map = laser_scan_map.squeeze(2)
         # laser_scan_map_low = laser_scan_map_low.squeeze(2)
+        cv2.imwrite("augmentation/" +  str(i) + "_" + str(self.augmentation_level) + "_laser.png",laser_scan_map)
+        cv2.imwrite("augmentation/" + str(i) + "_" + str(self.augmentation_level) + "_map.png",local_maps)
         laser_scan_map = torch.from_numpy(laser_scan_map).type(torch.FloatTensor)
         local_maps = torch.from_numpy(local_maps).type(torch.FloatTensor)
         local_maps = local_maps.unsqueeze(0)
         laser_scan_map = laser_scan_map.unsqueeze(0)
-
+        self.augmentation_level += 1
+        if self.augmentation_level <=4:
+            self.__getitem__(i)
+        else:
+            self.augmentation_level = 0
         # local_maps = torch.from_numpy(local_maps).type(torch .FloatTensor).unsqueeze(0)
 
         return target_classes.type(torch.LongTensor), target_poses, target_objectness, local_maps, laser_scan_map

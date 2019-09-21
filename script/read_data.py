@@ -50,6 +50,13 @@ if __name__ == '__main__':
         help='batch size')
 
     parser.add_argument(
+        '--logDir', metavar='logDir', type=str, default="logs",
+        help='log dir')
+    parser.add_argument(
+        '--mode', metavar='mode', type=str, default="full",
+        help='mode')
+
+    parser.add_argument(
         '--debug', dest='debug', action='store_true',
         help='is dubug')
     parser.set_defaults(debug=False)
@@ -74,7 +81,7 @@ if __name__ == '__main__':
 
     my_model = Map_Model(map_dataset_train, map_dataset_validation,
                          args.resume,
-                         save=True, load_weight=True, cuda=args.isCuda)
+                         save=True, load_weight=True, cuda=args.isCuda, log_dir=args.logDir, mode=args.mode )
 
     # to debug:
     # my_model = Map_Model(map_dataset_train, map_dataset_validation,

@@ -108,7 +108,8 @@ class GenerateMap:
 
         # self.reset_gmapping()
         # self.get_map_info()
-        self.get_map()
+        if not is_online:
+            self.get_map()
         self.base_frame = rospy.get_param("/base_frame")
 
         # if self.is_online:

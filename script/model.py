@@ -190,7 +190,7 @@ class Map_Model:
     #     if is_best:
     #         shutil.copyfile(filename, os.path.join(self.project_path, 'model_best.pth.tar'))
 
-    def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None, mode="full"):
+    def __init__(self, dataset_train=None, dataset_validation=None, resume_path = None, learning_rate = 0.001, load_weight = True, save=True, real_time_test=False, log=True, cuda=None, mode="full", log_dir = "logs"):
         self.start = time.time()
 
         self.best_epoch_acc_objectness = None
@@ -228,7 +228,7 @@ class Map_Model:
         if (log):
             # p = sub.Popen(['rm', '-r', './logs'])
             # p.communicate()
-            self.logger = Logger('./logs')
+            self.logger = Logger(log_dir)
             print ("log in on")
         else:
             print ("log is off")
@@ -365,6 +365,10 @@ class Map_Model:
                 for x in range (target_classes.shape[1]):
                     for y in range (target_classes.shape[2]):
                         for anchor in range(target_classes.shape[3]):
+                            # calculate recall
+                            if target_objectness[batch_idx][x][y][anchor].item()<=0:
+                                continue
+
                             if (target_objectness[batch_idx][x][y][anchor].item()> constants.ACCURACY_THRESHOLD and objectness[batch_idx][x][y][anchor].item()>constants.ACCURACY_THRESHOLD_PREDICTION):
                                 object_acc.append(1)
                                 if acc[batch_idx][x][y][anchor]:
@@ -572,7 +576,7 @@ class Map_Model:
         self.dataloader_validation = DataLoader(self.dataset_validation, shuffle=True, num_workers=num_workers, batch_size=batch_size, drop_last=True)
         n_iters = self.start_epoch + n_iters
         start = max (self.start_epoch-1, 0)
-        self.validation(batch_size, start, save, plot=False)
+        # self.validation(batch_size, start, save, plot=False)
         for iter in range(self.start_epoch, n_iters):
             if iter >= 500:
                 self.dataset.set_augmentation_level(3)

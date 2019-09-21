@@ -145,7 +145,7 @@ class Utility:
             try:
                 # t = tf_listner.getLatestCommonTime("/base_laser", map_topic)
                 t = rospy.Time(0)
-                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_laser_link", t)
+                position, quaternion = tf_listner.lookupTransform(map_topic, "/base_laser", t)
             except Exception as e:
                 print (e)
                 number_of_try -= 1

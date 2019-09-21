@@ -68,6 +68,8 @@ class DescribeOnline:
         self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.callback_laser_scan, queue_size=1)
         self.img_sub = rospy.Subscriber("/cost_map_node/img", Image, self.callback_map_image, queue_size=1)
         self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.callback_odom, queue_size=1)
+        self.generate_map = GenerateMap(is_online=True, map_offset=OFFSET_MAP, mode=MODE, map_name=MAP_NAME)
+
         if self.use_ground_truth_eval:
             self.generate_map = GenerateMap(is_online=True, map_offset=OFFSET_MAP, mode=MODE, map_name=MAP_NAME)
             self.t1 = threading.Thread(target=self.generate_map.point_generator)
@@ -78,6 +80,8 @@ class DescribeOnline:
                 print ("waiting for generate map to init")
                 time.sleep(10)
             print ("init ground truth eval done")
+        else:
+            self.generate_map.is_init = True
         self.init = True
 
         print ("init done")
@@ -168,8 +172,11 @@ class DescribeOnline:
         #     self.generate_map.callback_robot_0(odom)
 
     def callback_map_image(self, image):
+        print ("in call back map ", self.generate_map.is_init, self.init)
+
         if not self.init or not self.generate_map.is_init:
             return
+        print ("in call back map afte")
         # print ("in call back image")
         try:
             cv_image = self.bridge.imgmsg_to_cv2(image, "mono8")
@@ -198,7 +205,9 @@ class DescribeOnline:
         img = model_utils.get_local_map(
             self.map["info"], self.map["data"], image_publisher=self.image_pub, dilate=True,
             map_dim=constants.LOCAL_MAP_DIM)
-        # self.local_map = cv2.flip(img, 0)
+        if not self.use_ground_truth_eval:
+            img = cv2.flip(img, 0)
+
         self.local_map = img
 
     def callback_laser_scan(self, scan):
@@ -217,9 +226,13 @@ if __name__=="__main__":
     parser.add_argument(
         '--model', metavar='model', type=str,
         help='resume checkpoint')
-    parser.set_defaults(model="full")
-    parser.set_defaults(map_index=7)
+    parser.add_argument(
+        '--use_real_data', metavar='use_real_data', type=str,
+        help='if useing real data')
+    parser.set_defaults(model="map")
+    parser.set_defaults(map_index=5)
     parser.set_defaults(file_index=7)
+    parser.set_defaults(use_real_data=True)
 
     args = parser.parse_args()
     f = open("script/data/map.info", "r")
@@ -237,11 +250,18 @@ if __name__=="__main__":
     model = args.model
     map = maps[args.map_index]
     MODE = map[3]
-    process_str = 'roslaunch robot_describe data_generator.launch transform_pose:="' + str(map[1]) + ' ' + \
-                  str(map[2]) + '"  map_name:=' + map[0]
-    print process_str
-    p = subprocess.Popen(process_str, stdout=None, shell=True)
-    time.sleep(10)
+    if args.use_real_data:
+        process_str = 'roslaunch robot_describe husky_map.launch'
+        print process_str
+        p = subprocess.Popen(process_str, stdout=None, shell=True)
+        time.sleep(10)
+    else:
+        process_str = 'roslaunch robot_describe data_generator.launch transform_pose:="' + str(map[1]) + ' ' + \
+                      str(map[2]) + '"  map_name:=' + map[0]
+        print process_str
+        p = subprocess.Popen(process_str, stdout=None, shell=True)
+        time.sleep(10)
+
 
     global MAP_NAME, OFFSET_MAP, MODE
     # for model in models:
@@ -251,7 +271,7 @@ if __name__=="__main__":
     MAP_NAME = map[0]
     OFFSET_MAP = (map[1], map[2])
 
-    describe_online = DescribeOnline(models[model], use_cuda=torch.cuda.is_available(), mode=model, file_index=args.file_index)
+    describe_online = DescribeOnline(models[model], use_cuda=torch.cuda.is_available(), mode=model, file_index=args.file_index, use_ground_truth_eval=False)
 
 
     while True:
